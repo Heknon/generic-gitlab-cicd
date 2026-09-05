@@ -1,0 +1,32 @@
+include:
+- component: $CI_SERVER_FQDN/platform/ci-components/workflow@1.0.0
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: app-lint
+    stage: lint
+    setup:
+    - python -m pip install -r requirements-ci.txt
+    commands:
+    - python -m ruff check .
+    - python -m ruff format --check .
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: app-test
+    setup:
+    - python -m pip install -r requirements-ci.txt
+    - python -m pip install --no-deps -e .
+    commands:
+    - python -m pytest --junitxml=reports/junit.xml
+    junit:
+    - reports/junit.xml
+- component: $CI_SERVER_FQDN/platform/ci-components/python-package@1.0.0
+  inputs:
+    name: app-package
+    output: ci-dist/app
+    setup:
+    - python -m pip install -r requirements-ci.txt
+- component: $CI_SERVER_FQDN/platform/ci-components/python-publish@1.0.0
+  inputs:
+    name: app-publish
+    build-job: app-package
+    distribution-path: ci-dist/app

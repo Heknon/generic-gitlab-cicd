@@ -1,0 +1,47 @@
+variables:
+  CI_DEPENDENCY_REPO:
+    value: ''
+    description: Optional credential-free HTTPS candidate repository
+  CI_DEPENDENCY_REF:
+    value: ''
+    description: Candidate branch/tag/commit
+  CI_DEPENDENCY_PACKAGE:
+    value: ''
+    description: Distribution to override
+  CI_DEPENDENCY_OVERRIDES:
+    value: '[]'
+    description: Optional JSON array for multiple candidate dependencies
+include:
+- component: $CI_SERVER_FQDN/platform/ci-components/workflow@1.0.0
+- component: $CI_SERVER_FQDN/platform/ci-components/version-check@1.0.0
+  inputs:
+    name: app-version
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: app-lint
+    image: $PYTHON_CI_IMAGE
+    stage: lint
+    commands:
+    - ruff check .
+    - ruff format --check .
+- component: $CI_SERVER_FQDN/platform/ci-components/uv-test@1.0.0
+  inputs:
+    name: app-test
+    repo: $CI_DEPENDENCY_REPO
+    ref: $CI_DEPENDENCY_REF
+    package: $CI_DEPENDENCY_PACKAGE
+    overrides-json: $CI_DEPENDENCY_OVERRIDES
+- component: $CI_SERVER_FQDN/platform/ci-components/python-package@1.0.0
+  inputs:
+    name: app-package
+    image: $PYTHON_CI_IMAGE
+    output: ci-dist/app
+    build-command: uv build --no-sources --out-dir "$CI_PROJECT_DIR/$COMPONENT_OUTPUT"
+    check-command: python -m twine check "$CI_PROJECT_DIR/$COMPONENT_OUTPUT"/*
+- component: $CI_SERVER_FQDN/platform/ci-components/python-publish@1.0.0
+  inputs:
+    name: app-publish
+    build-job: app-package
+    distribution-path: ci-dist/app
+    repository-url: $PYPI_UPLOAD_URL
+- component: $CI_SERVER_FQDN/platform/ci-components/release@1.0.0

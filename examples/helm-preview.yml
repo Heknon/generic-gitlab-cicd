@@ -1,0 +1,21 @@
+include:
+- component: $CI_SERVER_FQDN/platform/ci-components/workflow@1.0.0
+- component: $CI_SERVER_FQDN/platform/ci-components/container-preview-build@1.0.0
+  inputs:
+    name: api-preview-image
+    destination: $PREVIEW_IMAGES_REPOSITORY/api:$CI_COMMIT_SHA
+    metadata-file: api-preview-metadata.json
+- component: $CI_SERVER_FQDN/platform/ci-components/helm-preview@1.0.0
+  inputs:
+    name: api-preview
+    dependencies:
+    - api-preview-image
+    url: https://api-$CI_PROJECT_ID-$CI_MERGE_REQUEST_IID.$PREVIEW_DOMAIN
+    setup:
+    - "python - <<'PYTHON'\nimport os,yaml\nfrom pathlib import Path\np=Path('deploy/preview.yaml')\n\
+      v=yaml.safe_load(p.read_text())\nfor name,app in v['apps'].items():\n    if\
+      \ app.get('ingress',{}).get('enabled'):\n        app['ingress']['host']=f\"\
+      {name}-{os.environ['CI_PROJECT_ID']}-{os.environ['CI_MERGE_REQUEST_IID']}.{os.environ['PREVIEW_DOMAIN']}\"\
+      \np.write_text(yaml.safe_dump(v))\nPYTHON"
+    values-file: deploy/preview.yaml
+    image-map-json: '[{"app":"api","repository":"$PREVIEW_IMAGES_REPOSITORY/api","metadata":"api-preview-metadata.json"}]'

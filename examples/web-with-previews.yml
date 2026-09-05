@@ -1,0 +1,64 @@
+include:
+- component: $CI_SERVER_FQDN/platform/ci-components/workflow@1.0.0
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: web-lint
+    image: node:22-bookworm-slim
+    stage: lint
+    setup:
+    - npm ci --cache .npm --prefer-offline
+    commands:
+    - npm run lint
+    cache-files:
+    - package-lock.json
+    cache-paths:
+    - .npm/
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: web-test
+    image: node:22-bookworm-slim
+    setup:
+    - npm ci --cache .npm --prefer-offline
+    commands:
+    - npm test -- --run
+    cache-files:
+    - package-lock.json
+    cache-paths:
+    - .npm/
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: web-build
+    image: node:22-bookworm-slim
+    stage: build
+    setup:
+    - npm ci --cache .npm --prefer-offline
+    commands:
+    - npm run build
+    artifact-paths:
+    - dist/
+    cache-files:
+    - package-lock.json
+    cache-paths:
+    - .npm/
+- component: $CI_SERVER_FQDN/platform/ci-components/deploy@1.0.0
+  inputs:
+    name: web-production
+    image: $DEPLOY_IMAGE
+    dependencies:
+    - web-build
+    url: https://app.example.com
+    commands:
+    - deployctl release --artifact dist --version "$CI_COMMIT_SHA" --environment "$CI_ENVIRONMENT_NAME"
+    - deployctl health --environment "$CI_ENVIRONMENT_NAME"
+- component: $CI_SERVER_FQDN/platform/ci-components/preview@1.0.0
+  inputs:
+    name: web-preview
+    image: $DEPLOY_IMAGE
+    dependencies:
+    - web-build
+    url: https://web-$CI_MERGE_REQUEST_IID.preview.example.com
+    deploy-commands:
+    - deployctl preview up --artifact dist --id "$CI_PROJECT_ID-$CI_MERGE_REQUEST_IID"
+    - deployctl preview health --id "$CI_PROJECT_ID-$CI_MERGE_REQUEST_IID"
+    stop-commands:
+    - deployctl preview down --id "$CI_PROJECT_ID-$CI_MERGE_REQUEST_IID" --ignore-missing

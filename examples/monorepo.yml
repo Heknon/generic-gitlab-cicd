@@ -1,0 +1,118 @@
+variables:
+  CI_FULL_PIPELINE:
+    value: 'false'
+    description: Set true to validate all services regardless of changed paths.
+include:
+- component: $CI_SERVER_FQDN/platform/ci-components/workflow@1.0.0
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: api-lint
+    stage: lint
+    directory: services/api
+    rules: &id002
+    - if: $CI_COMMIT_TAG
+    - if: $CI_FULL_PIPELINE == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: &id001
+      - services/api/**/*
+      - packages/common/**/*
+      - ci/**/*
+      - .gitlab-ci.yml
+      - requirements-ci.txt
+    - if: $CI_COMMIT_BRANCH
+      changes: *id001
+    - when: never
+    setup:
+    - python -m pip install -r "$CI_PROJECT_DIR/requirements-ci.txt"
+    - python -m pip install -e .
+    commands:
+    - python -m ruff check .
+    - python -m ruff format --check .
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: api-test
+    stage: test
+    directory: services/api
+    rules: *id002
+    setup:
+    - python -m pip install -r "$CI_PROJECT_DIR/requirements-ci.txt"
+    - python -m pip install -e .
+    commands:
+    - python -m pytest --junitxml=reports/junit.xml
+    junit:
+    - services/api/reports/junit.xml
+- component: $CI_SERVER_FQDN/platform/ci-components/python-package@1.0.0
+  inputs:
+    name: api-package
+    directory: services/api
+    output: ci-dist/api
+    rules: *id002
+    setup:
+    - python -m pip install -r "$CI_PROJECT_DIR/requirements-ci.txt"
+- component: $CI_SERVER_FQDN/platform/ci-components/python-publish@1.0.0
+  inputs:
+    name: api-publish
+    build-job: api-package
+    distribution-path: ci-dist/api
+    environment: pypi/api
+    rules:
+    - if: $CI_COMMIT_TAG =~ /^api-v[0-9]+\.[0-9]+\.[0-9]+/ && $CI_COMMIT_REF_PROTECTED == "true"
+      when: manual
+    - when: never
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: sdk-lint
+    stage: lint
+    directory: packages/sdk
+    rules: &id004
+    - if: $CI_COMMIT_TAG
+    - if: $CI_FULL_PIPELINE == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: &id003
+      - packages/sdk/**/*
+      - packages/common/**/*
+      - ci/**/*
+      - .gitlab-ci.yml
+      - requirements-ci.txt
+    - if: $CI_COMMIT_BRANCH
+      changes: *id003
+    - when: never
+    setup:
+    - python -m pip install -r "$CI_PROJECT_DIR/requirements-ci.txt"
+    - python -m pip install -e .
+    commands:
+    - python -m ruff check .
+    - python -m ruff format --check .
+- component: $CI_SERVER_FQDN/platform/ci-components/task@1.0.0
+  inputs:
+    name: sdk-test
+    stage: test
+    directory: packages/sdk
+    rules: *id004
+    setup:
+    - python -m pip install -r "$CI_PROJECT_DIR/requirements-ci.txt"
+    - python -m pip install -e .
+    commands:
+    - python -m pytest --junitxml=reports/junit.xml
+    junit:
+    - packages/sdk/reports/junit.xml
+- component: $CI_SERVER_FQDN/platform/ci-components/python-package@1.0.0
+  inputs:
+    name: sdk-package
+    directory: packages/sdk
+    output: ci-dist/sdk
+    rules: *id004
+    setup:
+    - python -m pip install -r "$CI_PROJECT_DIR/requirements-ci.txt"
+- component: $CI_SERVER_FQDN/platform/ci-components/python-publish@1.0.0
+  inputs:
+    name: sdk-publish
+    build-job: sdk-package
+    distribution-path: ci-dist/sdk
+    environment: pypi/sdk
+    rules:
+    - if: $CI_COMMIT_TAG =~ /^sdk-v[0-9]+\.[0-9]+\.[0-9]+/ && $CI_COMMIT_REF_PROTECTED == "true"
+      when: manual
+    - when: never

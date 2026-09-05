@@ -1,0 +1,33 @@
+include:
+- local: /templates/workflow.yml
+- local: /templates/task.yml
+  inputs:
+    name: component-smoke
+    stage: test
+    image: $PYTHON_CI_IMAGE
+    commands:
+    - python -m unittest discover -s tests -v
+    - python tests/integration_uv.py
+- local: /templates/task.yml
+  inputs:
+    name: helm-validate
+    stage: test
+    image: $HELM_CI_IMAGE
+    commands:
+    - helm lint charts/generic-app -f examples/helm-values.yaml --strict
+    - helm template smoke charts/generic-app -f examples/helm-values.yaml > /tmp/rendered.yaml
+runtime-images:
+  stage: build
+  trigger:
+    include:
+    - local: images.gitlab-ci.yml
+    strategy: depend
+  rules:
+  - if: $CI_COMMIT_REF_PROTECTED == "true"
+    changes:
+    - images/**/*
+    - images.gitlab-ci.yml
+    - templates/container-build.yml
+    when: manual
+  - when: never
+  allow_failure: true
