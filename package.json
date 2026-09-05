@@ -1,0 +1,10 @@
+{
+  "name": "generic-gitlab-cicd-tests",
+  "private": true,
+  "scripts": {
+    "test:ci-local": "python tools/testing/local.py"
+  },
+  "devDependencies": {
+    "gitlab-ci-local": "4.75.1"
+  }
+}

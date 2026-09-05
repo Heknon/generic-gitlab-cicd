@@ -46,6 +46,23 @@ def overlay_images(bindings, images, previous, partial):
     return overlay
 
 
+def require_forward_commit(root, previous, current):
+    """Recover shallow history before distinguishing stale commits from Git errors."""
+    if not all(re.fullmatch(r'[a-f0-9]{40}', value) for value in (previous, current)):
+        raise ValueError('deployment history requires full Git commit IDs')
+    command = ['git', 'merge-base', '--is-ancestor', previous, current]
+    result = subprocess.run(command, cwd=root, capture_output=True)
+    if result.returncode:
+        shallow = subprocess.check_output(['git', 'rev-parse', '--is-shallow-repository'], cwd=root, text=True).strip()
+        if shallow == 'true':
+            subprocess.run(['git', 'fetch', '--unshallow', '--no-tags', 'origin'], cwd=root, check=True, capture_output=True)
+            result = subprocess.run(command, cwd=root, capture_output=True)
+    if result.returncode == 1:
+        raise ValueError('stale/nonlinear image update; explicit rollback or reconciliation required')
+    if result.returncode:
+        raise ValueError('cannot verify deployment ancestry; ensure both commits are available from origin')
+
+
 def deploy(data, node, root, out, records, plan, stop=False):
     settings, infra = node['settings'], data['platform']
     target = infra['targets'][settings['target']]
@@ -108,9 +125,7 @@ def deploy(data, node, root, out, records, plan, stop=False):
             old_commit = prior.get('commit')
             current = os.environ['CI_COMMIT_SHA']
             if old_commit and old_commit != current:
-                valid = subprocess.run(['git', 'merge-base', '--is-ancestor', old_commit, current], cwd=root, capture_output=True)
-                if valid.returncode:
-                    raise ValueError(f'{name}: stale/nonlinear image update; explicit rollback or complete reconciliation required')
+                require_forward_commit(root, old_commit, current)
         overlay = overlay_images(settings['images'], images, previous, partial and bool(listing))
         services = dict(old_meta.get('services', {})) if partial else {}
         for name in images:

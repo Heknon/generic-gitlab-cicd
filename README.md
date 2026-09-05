@@ -1,3 +1,5 @@
+Testing commands and the local/E2E split: [testing — revision one](docs/testing-revision-one.md).
+
 Start with the [documentation map](docs/README.md), [AI authoring guide](docs/ai-authoring-revision-three.md), or portable [generic-ci-authoring skill](skills/generic-ci-authoring/SKILL.md).
 
 Organization defaults and Git-backed starter templates are now available: see [configuration sources — revision two](docs/configuration-sources-revision-two.md).

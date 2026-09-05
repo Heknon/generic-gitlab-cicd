@@ -10,3 +10,6 @@ dist/
 *.egg-info/
 .ci-out/
 images/python/wheelhouse/toolkit-requirements.txt
+node_modules/
+.gitlab-ci-local/
+.test-results/
