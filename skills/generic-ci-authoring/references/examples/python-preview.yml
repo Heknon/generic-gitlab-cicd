@@ -1,0 +1,24 @@
+version: 1
+projects:
+  sdk:
+    path: packages/sdk
+    python: {groups: all}
+    package:
+      index: internal
+      preview: {index: preview}
+    checks:
+      unit:
+        script: ["uv run --no-sync pytest"]
+    release:
+      tag: "sdk-v{version}"
+    workflows:
+      merge-request:
+        checks: [unit]
+        publish: {channel: development}
+      release:
+        checks: [unit]
+        publish: {channel: auto}
+# Configure the named uv indexes in packages/sdk/pyproject.toml.
+# Recommended: explicit=true and a separate repository to avoid accidental consumption.
+# Omit package.preview to use the normal publishing destination.
+# See docs/workflows-revision-one.md, Package publication — revision four.

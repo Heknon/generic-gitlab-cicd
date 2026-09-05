@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=../../../schemas/delivery.schema.json
+schema-version: 1
+projects:
+  api:
+    preset: python-service
+    steps:
+      export:
+        script:
+        - uv run --no-sync python scripts/generate_sdk.py
+        outputs:
+          specification: generated/openapi.json
+          sdk: generated/sdk
+    release:
+      tag: api-v{version}
+  sdk:
+    path: .
+    preset: generic
+    checks:
+      generated:
+        needs:
+        - api.export
+        script:
+        - python scripts/check_generated_sdk.py
+    package:
+      directory: generated/sdk
+      index: internal
+      needs:
+      - api.export
+    release:
+      version-file: sdk-pyproject.toml
+      tag: sdk-v{version}
+    depends-on:
+    - api

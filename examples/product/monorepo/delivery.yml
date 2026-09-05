@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=../../../schemas/delivery.schema.json
+schema-version: 1
+projects:
+  api:
+    path: services/api
+    preset: python-service
+    depends-on:
+    - common
+    container:
+      context:
+        repository: .
+      dockerfile: Dockerfile
+    deploy:
+      staging:
+        target: staging
+        values:
+        - deploy/values.yml
+        images:
+          api:
+            repository:
+            - apps
+            - api
+            - image
+            - repository
+            digest:
+            - apps
+            - api
+            - image
+            - digest
+          worker:
+            repository:
+            - apps
+            - worker
+            - image
+            - repository
+            digest:
+            - apps
+            - worker
+            - image
+            - digest
+        before:
+        - python scripts/migrate.py
+        after:
+        - python scripts/check_http.py
+  worker:
+    path: services/worker
+    preset: python-service
+    depends-on:
+    - common
+  common:
+    path: packages/common
+    preset: python-package
+    package:
+      index: internal
+    release:
+      tag: common-v{version}

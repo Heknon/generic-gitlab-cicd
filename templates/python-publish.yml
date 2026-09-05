@@ -43,7 +43,7 @@ spec:
     repository-url:
       type: string
       description: PyPI, TestPyPI, or private upload endpoint.
-      default: https://upload.pypi.org/legacy/
+      default: $PYPI_UPLOAD_URL
     auth:
       type: string
       description: token uses TWINE_USERNAME/TWINE_PASSWORD; oidc uses trusted publishing.

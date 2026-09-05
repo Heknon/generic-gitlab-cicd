@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=../../../schemas/delivery.schema.json
+schema-version: 1
+projects:
+  api:
+    preset: python-service
+    deploy:
+      staging:
+        target: staging
+        chart: chart
+        values:
+        - chart/values.yaml
+        images:
+          api:
+            repository:
+            - image
+            - repository
+            digest:
+            - image
+            - digest
+        after:
+        - python scripts/check_http.py

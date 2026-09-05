@@ -1,0 +1,152 @@
+{
+  "$defs": {
+    "Runtime": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Approved image with generic-gitlab-ci at the compiler version plus required tools.",
+          "title": "Image"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "shell": {
+          "default": "sh",
+          "enum": [
+            "sh",
+            "powershell"
+          ],
+          "title": "Shell",
+          "type": "string"
+        }
+      },
+      "title": "Runtime",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {
+          "title": "Namespace",
+          "type": "string"
+        },
+        "release-prefix": {
+          "default": "app",
+          "title": "Release-Prefix",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "title": "Url",
+          "type": "string"
+        },
+        "production": {
+          "default": true,
+          "title": "Production",
+          "type": "boolean"
+        },
+        "kubeconfig-variable": {
+          "default": "KUBECONFIG",
+          "title": "Kubeconfig-Variable",
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace"
+      ],
+      "title": "Target",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema-version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema-Version",
+      "type": "integer"
+    },
+    "runtimes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Runtime"
+      },
+      "description": "Must include default; optional build, helm, release runtime overrides.",
+      "title": "Runtimes",
+      "type": "object"
+    },
+    "registry": {
+      "title": "Registry",
+      "type": "string"
+    },
+    "preview-registry": {
+      "title": "Preview-Registry",
+      "type": "string"
+    },
+    "chart": {
+      "title": "Chart",
+      "type": "string"
+    },
+    "chart-version": {
+      "title": "Chart-Version",
+      "type": "string"
+    },
+    "targets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Target"
+      },
+      "title": "Targets",
+      "type": "object"
+    },
+    "allowed-hosts": {
+      "description": "Internal Git, registry, index and chart hosts; no implicit public fallback.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Allowed-Hosts",
+      "type": "array"
+    },
+    "max-jobs": {
+      "default": 150,
+      "maximum": 1000,
+      "minimum": 1,
+      "title": "Max-Jobs",
+      "type": "integer"
+    },
+    "artifact-retention": {
+      "default": "30 days",
+      "title": "Artifact-Retention",
+      "type": "string"
+    },
+    "mandatory-checks": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Mandatory-Checks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "runtimes",
+    "registry",
+    "preview-registry",
+    "chart",
+    "chart-version",
+    "allowed-hosts"
+  ],
+  "title": "Platform",
+  "type": "object"
+}

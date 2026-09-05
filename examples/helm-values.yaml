@@ -6,7 +6,7 @@ apps:
     replicas: 2
     image:
       repository: artifactory.example.internal/docker-local/apps/api
-      digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      tag: 1.5.0
     command: []
     args: []
     config:
@@ -37,18 +37,19 @@ apps:
       enabled: true
       port: 80
       targetPort: 8080
-    ingress:
+    route:
       enabled: true
-      className: nginx
       host: api.example.internal
-      tlsSecret: api-tls
       annotations: {}
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect
   worker:
     enabled: true
     replicas: 2
     image:
       repository: artifactory.example.internal/docker-local/apps/worker
-      digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      tag: 1.5.0
     command: []
     args: []
     config:
@@ -72,9 +73,5 @@ apps:
       enabled: false
       port: 80
       targetPort: 8080
-    ingress:
+    route:
       enabled: false
-      className: nginx
-      host: api.example.internal
-      tlsSecret: api-tls
-      annotations: {}

@@ -6,6 +6,7 @@ include:
     stage: test
     image: $PYTHON_CI_IMAGE
     commands:
+    - python scripts/sync_authoring_skill.py --check
     - python -m unittest discover -s tests -v
     - python tests/integration_uv.py
 - local: /templates/task.yml
@@ -14,6 +15,7 @@ include:
     stage: test
     image: $HELM_CI_IMAGE
     commands:
+    - python -m unittest discover -s tests -p test_chart.py
     - helm lint charts/generic-app -f examples/helm-values.yaml --strict
     - helm template smoke charts/generic-app -f examples/helm-values.yaml > /tmp/rendered.yaml
 runtime-images:

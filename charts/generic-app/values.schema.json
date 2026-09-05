@@ -17,10 +17,7 @@
           "image",
           "replicas",
           "config",
-          "resources",
-          "readinessProbe",
-          "service",
-          "ingress"
+          "service"
         ],
         "properties": {
           "enabled": {
@@ -34,16 +31,16 @@
             "type": "object",
             "required": [
               "repository",
-              "digest"
+              "tag"
             ],
             "properties": {
               "repository": {
                 "type": "string",
                 "minLength": 1
               },
-              "digest": {
+              "tag": {
                 "type": "string",
-                "pattern": "^sha256:[a-f0-9]{64}$"
+                "minLength": 1
               }
             }
           },
@@ -54,44 +51,15 @@
             }
           },
           "resources": {
-            "type": "object",
-            "required": [
-              "requests",
-              "limits"
-            ]
+            "type": "object"
           },
           "readinessProbe": {
-            "type": "object",
-            "minProperties": 1,
-            "oneOf": [
-              {
-                "required": [
-                  "httpGet"
-                ]
-              },
-              {
-                "required": [
-                  "exec"
-                ]
-              },
-              {
-                "required": [
-                  "tcpSocket"
-                ]
-              },
-              {
-                "required": [
-                  "grpc"
-                ]
-              }
-            ]
+            "type": "object"
           },
           "service": {
             "type": "object",
             "required": [
-              "enabled",
-              "port",
-              "targetPort"
+              "enabled"
             ],
             "properties": {
               "enabled": {
@@ -106,63 +74,125 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 65535
+              },
+              "ports": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "annotations": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "labels": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             }
           },
-          "ingress": {
+          "route": {
             "type": "object",
-            "required": [
-              "enabled"
-            ],
             "properties": {
               "enabled": {
                 "type": "boolean"
-              }
-            }
-          }
-        },
-        "allOf": [
-          {
-            "if": {
-              "properties": {
-                "ingress": {
-                  "properties": {
-                    "enabled": {
-                      "const": true
-                    }
+              },
+              "host": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "annotations": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "wildcardPolicy": {
+                "type": "string"
+              },
+              "tls": {
+                "type": "object",
+                "properties": {
+                  "termination": {
+                    "type": "string"
+                  },
+                  "insecureEdgeTerminationPolicy": {
+                    "type": "string"
+                  },
+                  "certificate": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "caCertificate": {
+                    "type": "string"
+                  },
+                  "destinationCACertificate": {
+                    "type": "string"
                   }
                 }
-              }
-            },
-            "then": {
-              "properties": {
-                "service": {
-                  "properties": {
-                    "enabled": {
-                      "const": true
-                    }
-                  }
-                },
-                "ingress": {
-                  "required": [
-                    "host",
-                    "className"
-                  ],
-                  "properties": {
-                    "host": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "className": {
-                      "type": "string",
-                      "minLength": 1
-                    }
-                  }
-                }
+              },
+              "targetPort": {
+                "type": [
+                  "string",
+                  "integer"
+                ]
               }
             }
+          },
+          "livenessProbe": {
+            "type": "object"
+          },
+          "startupProbe": {
+            "type": "object"
+          },
+          "podSecurityContext": {
+            "type": "object"
+          },
+          "securityContext": {
+            "type": "object"
+          },
+          "automountServiceAccountToken": {
+            "type": "boolean"
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "volumeMounts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "podLabels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "podAnnotations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
-        ]
+        }
       }
     },
     "imagePullSecrets": {

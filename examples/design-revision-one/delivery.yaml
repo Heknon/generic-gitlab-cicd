@@ -1,0 +1,71 @@
+# Proposed revision-one design; not accepted by the existing prototype compiler.
+version: 1
+projects:
+  api:
+    path: services/api
+    python:
+      groups: all
+    checks:
+      fast:
+        script: ["uv run --no-sync pytest tests/unit"]
+      database:
+        script: ["uv run --no-sync pytest tests/database"]
+        tags: [database-runner]
+      style:
+        script: ["uv run --no-sync ruff check ."]
+    container:
+      dockerfile: Dockerfile
+      context: .
+    release:
+      tag: "api/v{version}"
+    workflows:
+      push:
+        checks: [fast, style]
+      merge-request:
+        checks: [fast, style, database]
+      release:
+        checks: [fast, database]
+        build: true
+  worker:
+    path: services/worker
+    python:
+      groups: all
+    checks:
+      unit:
+        script: ["uv run --no-sync pytest"]
+    container:
+      dockerfile: Dockerfile
+      context: .
+    release:
+      tag: "worker/v{version}"
+    workflows:
+      push:
+        checks: [unit]
+      merge-request:
+        checks: [unit]
+      release:
+        checks: [unit]
+        build: true
+
+deployments:
+  backend:
+    chart:
+      repository: https://artifactory.internal/helm
+      name: generic-services
+      version: "2.3.1"
+    values:
+      - deploy/values/common.yaml
+      - deploy/values/production.yaml
+    images:
+      - from: api.build-image
+        set:
+          repository: services.api.image.repository
+          tag: services.api.image.tag
+      - from: worker.build-image
+        set:
+          repository: services.worker.image.repository
+          tag: services.worker.image.tag
+    update: partial
+    workflows:
+      release:
+        when: manual

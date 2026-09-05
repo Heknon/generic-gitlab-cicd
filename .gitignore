@@ -5,3 +5,8 @@ __pycache__/
 images/python/wheelhouse/*.whl
 reports/
 image.oci.tar
+build/
+dist/
+*.egg-info/
+.ci-out/
+images/python/wheelhouse/toolkit-requirements.txt

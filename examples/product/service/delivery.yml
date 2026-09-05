@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../../../schemas/delivery.schema.json
+schema-version: 1
+projects:
+  api:
+    preset: python-service
+    container:
+      dependency-bundle: true
+    deploy:
+      staging:
+        target: staging
+        values:
+        - deploy/values.yml
+        when: on_success
+      production:
+        target: production
+        values:
+        - deploy/values.yml
+        before:
+        - uv run --no-sync python scripts/check_database.py
+        after:
+        - python scripts/check_http.py
+      review:
+        target: review
+        preview: true
+        values:
+        - deploy/values.yml
+        when: on_success
+    release:
+      tag: api-v{version}

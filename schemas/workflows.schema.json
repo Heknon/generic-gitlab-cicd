@@ -1,0 +1,1013 @@
+{
+  "$defs": {
+    "Binding": {
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        },
+        "digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        }
+      },
+      "title": "Binding",
+      "type": "object"
+    },
+    "Build": {
+      "additionalProperties": false,
+      "properties": {
+        "script": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Script",
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Outputs",
+          "type": "array"
+        },
+        "needs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "script",
+        "outputs"
+      ],
+      "title": "Build",
+      "type": "object"
+    },
+    "Chart": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "oci": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Oci"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "title": "Chart",
+      "type": "object"
+    },
+    "Check": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tags"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout"
+        },
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "object"
+        },
+        "services": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Services"
+        },
+        "parallel": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parallel"
+        },
+        "artifacts": {
+          "additionalProperties": true,
+          "title": "Artifacts",
+          "type": "object"
+        },
+        "script": {
+          "description": "Team-owned commands, executed after preparation.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Script",
+          "type": "array"
+        },
+        "dependencies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Python"
+            },
+            {
+              "const": false,
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dependencies"
+        },
+        "needs": {
+          "description": "Checks or project.build outputs required in the same event.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "outputs": {
+          "description": "Project-relative files passed to consumers; matrices cannot produce shared files.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Outputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "script"
+      ],
+      "title": "Check",
+      "type": "object"
+    },
+    "CheckList": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Checks",
+          "type": "array"
+        }
+      },
+      "title": "CheckList",
+      "type": "object"
+    },
+    "Container": {
+      "additionalProperties": false,
+      "properties": {
+        "dockerfile": {
+          "default": "Dockerfile",
+          "title": "Dockerfile",
+          "type": "string"
+        },
+        "context": {
+          "default": ".",
+          "title": "Context",
+          "type": "string"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository"
+        },
+        "needs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "build-args": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Build-Args",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Secret ID to file-type CI variable name.",
+          "title": "Secrets",
+          "type": "object"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        },
+        "dependency-bundle": {
+          "default": false,
+          "description": "Python Dockerfile consumes named ci-dependencies wheelhouse context; required for candidate previews.",
+          "title": "Dependency-Bundle",
+          "type": "boolean"
+        }
+      },
+      "title": "Container",
+      "type": "object"
+    },
+    "CreateRelease": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "default": "main",
+          "title": "Branch",
+          "type": "string"
+        },
+        "when": {
+          "const": "manual",
+          "default": "manual",
+          "title": "When",
+          "type": "string"
+        }
+      },
+      "title": "CreateRelease",
+      "type": "object"
+    },
+    "DeployWorkflow": {
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "default": "manual",
+          "enum": [
+            "manual",
+            "automatic"
+          ],
+          "title": "When",
+          "type": "string"
+        }
+      },
+      "title": "DeployWorkflow",
+      "type": "object"
+    },
+    "Deployment": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "description": "Platform target containing namespace, kubeconfig variable and URL.",
+          "title": "Target",
+          "type": "string"
+        },
+        "chart": {
+          "$ref": "#/$defs/Chart"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "array"
+        },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/Image"
+          },
+          "minItems": 1,
+          "title": "Images",
+          "type": "array"
+        },
+        "update": {
+          "default": "complete",
+          "enum": [
+            "complete",
+            "partial"
+          ],
+          "title": "Update",
+          "type": "string"
+        },
+        "before": {
+          "$ref": "#/$defs/CheckList"
+        },
+        "after": {
+          "$ref": "#/$defs/CheckList"
+        },
+        "workflows": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DeployWorkflow"
+          },
+          "propertyNames": {
+            "enum": [
+              "release",
+              "merge-request"
+            ]
+          },
+          "title": "Workflows",
+          "type": "object"
+        },
+        "auto-stop-in": {
+          "default": "2 days",
+          "title": "Auto-Stop-In",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "chart",
+        "images"
+      ],
+      "title": "Deployment",
+      "type": "object"
+    },
+    "Execution": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tags"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout"
+        },
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "object"
+        },
+        "services": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Services"
+        },
+        "parallel": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parallel"
+        },
+        "artifacts": {
+          "additionalProperties": true,
+          "title": "Artifacts",
+          "type": "object"
+        }
+      },
+      "title": "Execution",
+      "type": "object"
+    },
+    "Image": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "title": "From",
+          "type": "string"
+        },
+        "set": {
+          "$ref": "#/$defs/Binding"
+        }
+      },
+      "required": [
+        "from",
+        "set"
+      ],
+      "title": "Image",
+      "type": "object"
+    },
+    "Node": {
+      "additionalProperties": false,
+      "properties": {
+        "package-manager": {
+          "enum": [
+            "npm",
+            "pnpm",
+            "bun"
+          ],
+          "title": "Package-Manager",
+          "type": "string"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit repository-relative workspace root; otherwise discover membership.",
+          "title": "Workspace"
+        }
+      },
+      "required": [
+        "package-manager"
+      ],
+      "title": "Node",
+      "type": "object"
+    },
+    "Package": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "title": "Directory",
+          "type": "string"
+        },
+        "preview": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreviewPackage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "index": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Python named uv publishing index; Node reads publishConfig.registry.",
+          "title": "Index"
+        },
+        "needs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        }
+      },
+      "title": "Package",
+      "type": "object"
+    },
+    "PreviewPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional Python named uv index override for development publication.",
+          "title": "Index"
+        },
+        "registry": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional Node registry override for development publication.",
+          "title": "Registry"
+        }
+      },
+      "title": "PreviewPackage",
+      "type": "object"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "default": ".",
+          "title": "Path",
+          "type": "string"
+        },
+        "python": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Python"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "node": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Node"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "defaults": {
+          "$ref": "#/$defs/Execution"
+        },
+        "checks": {
+          "patternProperties": {
+            "^[a-z][a-z0-9-]{0,39}$": {
+              "$ref": "#/$defs/Check"
+            }
+          },
+          "title": "Checks",
+          "type": "object"
+        },
+        "build": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Build"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "container": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Container"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "package": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Package"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Release"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "workflows": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Workflow"
+          },
+          "propertyNames": {
+            "enum": [
+              "push",
+              "merge-request",
+              "release",
+              "manual",
+              "schedule"
+            ]
+          },
+          "title": "Workflows",
+          "type": "object"
+        },
+        "depends-on": {
+          "description": "Changes to these projects select this consumer. Installation follows package metadata.",
+          "items": {
+            "pattern": "^[a-z][a-z0-9-]{0,39}$",
+            "type": "string"
+          },
+          "title": "Depends-On",
+          "type": "array"
+        },
+        "watch": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Watch",
+          "type": "array"
+        }
+      },
+      "title": "Project",
+      "type": "object"
+    },
+    "Publication": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "enum": [
+            "development",
+            "auto"
+          ],
+          "title": "Channel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel"
+      ],
+      "title": "Publication",
+      "type": "object"
+    },
+    "Python": {
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "anyOf": [
+            {
+              "const": "all",
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Omit to respect uv defaults; all selects all groups, not all workspace members.",
+          "title": "Groups"
+        },
+        "extras": {
+          "anyOf": [
+            {
+              "const": "all",
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Extras"
+        },
+        "upgrade": {
+          "default": "none",
+          "enum": [
+            "none",
+            "all"
+          ],
+          "title": "Upgrade",
+          "type": "string"
+        }
+      },
+      "title": "Python",
+      "type": "object"
+    },
+    "Release": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "require-bump": {
+          "default": true,
+          "title": "Require-Bump",
+          "type": "boolean"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "create": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CreateRelease"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "needs": {
+          "description": "Other projects whose matching release publication must finish first.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "title": "Release",
+      "type": "object"
+    },
+    "VersionSource": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "field"
+      ],
+      "title": "VersionSource",
+      "type": "object"
+    },
+    "Workflow": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "build": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "enum": [
+                  "application",
+                  "container",
+                  "package"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": false,
+          "title": "Build"
+        },
+        "publish": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Publication"
+            }
+          ],
+          "default": false,
+          "title": "Publish"
+        }
+      },
+      "title": "Workflow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1,
+      "default": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "projects": {
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,39}$": {
+          "$ref": "#/$defs/Project"
+        }
+      },
+      "title": "Projects",
+      "type": "object"
+    },
+    "deployments": {
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,39}$": {
+          "$ref": "#/$defs/Deployment"
+        }
+      },
+      "title": "Deployments",
+      "type": "object"
+    }
+  },
+  "required": [
+    "projects"
+  ],
+  "title": "Pipeline",
+  "type": "object"
+}

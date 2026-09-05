@@ -1,0 +1,15 @@
+[project]
+name="sdk"
+version="1.0.0"
+requires-python=">=3.11"
+dependencies=[]
+[build-system]
+requires=["hatchling"]
+build-backend="hatchling.build"
+[dependency-groups]
+dev=["pytest", "ruff"]
+[[tool.uv.index]]
+name="internal"
+url="https://packages.internal/simple/"
+publish-url="https://packages.internal/upload/"
+default=true

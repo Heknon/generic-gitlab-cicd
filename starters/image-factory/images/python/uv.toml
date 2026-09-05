@@ -1,0 +1,4 @@
+[[index]]
+name = "internal"
+url = "https://artifactory.internal/artifactory/api/pypi/pypi/simple"
+default = true

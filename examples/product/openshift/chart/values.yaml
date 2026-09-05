@@ -1,0 +1,5 @@
+image:
+  repository: registry.internal/apps/api
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+route:
+  host: api.apps.internal

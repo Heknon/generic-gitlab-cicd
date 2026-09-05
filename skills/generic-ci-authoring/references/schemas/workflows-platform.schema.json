@@ -1,0 +1,250 @@
+{
+  "$defs": {
+    "Builder": {
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "const": "buildah",
+          "default": "buildah",
+          "title": "Engine",
+          "type": "string"
+        },
+        "image": {
+          "title": "Image",
+          "type": "string"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tags"
+        }
+      },
+      "required": [
+        "image"
+      ],
+      "title": "Builder",
+      "type": "object"
+    },
+    "Execution": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tags"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout"
+        },
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "object"
+        },
+        "services": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Services"
+        },
+        "parallel": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parallel"
+        },
+        "artifacts": {
+          "additionalProperties": true,
+          "title": "Artifacts",
+          "type": "object"
+        }
+      },
+      "title": "Execution",
+      "type": "object"
+    },
+    "Registries": {
+      "additionalProperties": false,
+      "properties": {
+        "containers": {
+          "title": "Containers",
+          "type": "string"
+        },
+        "previews": {
+          "title": "Previews",
+          "type": "string"
+        }
+      },
+      "required": [
+        "containers",
+        "previews"
+      ],
+      "title": "Registries",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {
+          "title": "Namespace",
+          "type": "string"
+        },
+        "kubeconfig-variable": {
+          "default": "KUBECONFIG",
+          "title": "Kubeconfig-Variable",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "title": "Url",
+          "type": "string"
+        },
+        "production": {
+          "default": true,
+          "title": "Production",
+          "type": "boolean"
+        },
+        "release": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Release"
+        }
+      },
+      "required": [
+        "namespace"
+      ],
+      "title": "Target",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1,
+      "default": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "defaults": {
+      "$ref": "#/$defs/Execution"
+    },
+    "images": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Prepared images for python, node, bun, helm, and optional control role; all include toolkit Python runtime.",
+      "title": "Images",
+      "type": "object"
+    },
+    "container-builder": {
+      "$ref": "#/$defs/Builder"
+    },
+    "registries": {
+      "$ref": "#/$defs/Registries"
+    },
+    "allowed-hosts": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Allowed-Hosts",
+      "type": "array"
+    },
+    "targets": {
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,39}$": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "title": "Targets",
+      "type": "object"
+    },
+    "variables": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Variables",
+      "type": "object"
+    },
+    "max-jobs": {
+      "default": 150,
+      "maximum": 1000,
+      "minimum": 1,
+      "title": "Max-Jobs",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "images",
+    "container-builder",
+    "registries",
+    "allowed-hosts"
+  ],
+  "title": "Platform",
+  "type": "object"
+}

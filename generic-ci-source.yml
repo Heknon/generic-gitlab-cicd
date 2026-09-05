@@ -1,0 +1,8 @@
+version: 1
+cli: '>=0.3.0,<0.4.0'
+defaults:
+  platform: defaults/platform.yml
+templates:
+  python-package: starters/python-package
+  node-service: starters/node-service
+  image-factory: starters/image-factory

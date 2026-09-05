@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=../../../schemas/delivery.schema.json
+schema-version: 1
+projects:
+  sdk:
+    preset: python-package
+    checks:
+      unit:
+        gitlab:
+          image: registry.internal/ci/python-uv-toolkit:$PYTHON_VERSION
+          parallel:
+            matrix:
+            - PYTHON_VERSION:
+              - '3.11'
+              - '3.13'
+              - '3.14'
+      gpu:
+        script:
+        - uv run --no-sync pytest tests/gpu
+        gitlab:
+          tags:
+          - linux-amd64
+          - gpu
+      windows:
+        runtime: windows
+        script:
+        - uv run --no-sync pytest tests/unit
+    package:
+      index: internal
+    release:
+      tag: sdk-v{version}
