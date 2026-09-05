@@ -92,9 +92,6 @@ def setup_main(argv):
                     command = ecosystem + ' run test'
             test = ask('test-command', 'Test command (existing command; never executed by setup)', command)
             runtime = ask('runtime-image', 'Prepared runtime image containing the matching toolkit')
-            builder = ask('builder-image', 'Prepared Buildah image containing the matching toolkit')
-            registry = ask('registry', 'Release container registry/repository prefix')
-            previews = ask('preview-registry', 'Preview container registry/repository prefix')
             tag = ask('runner-tag', 'Runner tag')
             project = {'path': path, 'checks': {'test': {'script': [test]}},
                        'workflows': {'push': {'checks': ['test']}, 'merge-request': {'checks': ['test']}}}
@@ -103,13 +100,18 @@ def setup_main(argv):
                 project['python'] = {}
             elif ecosystem != 'generic':
                 project['node'] = {'package-manager': ecosystem}
+            deploy = ask('deploy', 'Create an OpenShift MR preview deployment? yes/no', 'no', ['yes', 'no'])
             platform = {'version': 1, 'defaults': {'tags': [tag]}, 'images': {role: runtime},
-                        'container-builder': {'image': builder},
-                        'registries': {'containers': registry, 'previews': previews},
-                        'allowed-hosts': sorted({x.split('/')[0] for x in [runtime, builder, registry, previews]}),
+                        'allowed-hosts': [urlsplit('https://' + runtime).hostname],
                         'variables': {'UV_PYTHON_DOWNLOADS': 'never'}}
             delivery = {'version': 1, 'projects': {name: project}}
-            deploy = ask('deploy', 'Create an OpenShift MR preview deployment? yes/no', 'no', ['yes', 'no'])
+            if deploy == 'yes' or any((args.builder_image, args.registry, args.preview_registry)):
+                builder = ask('builder-image', 'Prepared Buildah image containing the matching toolkit')
+                registry = ask('registry', 'Release container registry/repository prefix')
+                previews = ask('preview-registry', 'Preview container registry/repository prefix')
+                platform['container-builder'] = {'image': builder}
+                platform['registries'] = {'containers': registry, 'previews': previews}
+                platform['allowed-hosts'] = sorted({urlsplit('https://' + x).hostname for x in [runtime, builder, registry, previews]})
             if deploy == 'yes':
                 if not (application / 'Dockerfile').is_file():
                     raise ValueError('deployment setup requires an existing Dockerfile in the application directory')
@@ -125,7 +127,7 @@ def setup_main(argv):
                 project['workflows']['merge-request']['build'] = ['container']
                 project['container'] = {'dockerfile': 'Dockerfile', 'context': '.'}
                 platform['images']['helm'] = helm
-                platform['allowed-hosts'] = sorted(set(platform['allowed-hosts'] + [helm.split('/')[0], urlsplit(chart).hostname or '']))
+                platform['allowed-hosts'] = sorted(set(platform['allowed-hosts'] + [urlsplit('https://' + helm).hostname, urlsplit(chart).hostname or '']))
                 platform['targets'] = {'preview': {'namespace': namespace, 'production': False, 'kubeconfig-variable': 'PREVIEW_KUBECONFIG'}}
                 delivery['deployments'] = {name: {'target': 'preview', 'chart': {'oci': chart, 'version': version},
                     'values': ['deploy/values.yaml'], 'images': [{'from': name + '.build-image',

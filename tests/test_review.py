@@ -46,14 +46,19 @@ class ReviewRegressions(unittest.TestCase):
                 self.assertNotIn('tags', job)
 
     def test_reject_generated_name_collisions(self):
-        for name in ['version', 'build-image', 'publish', 'create-release']:
+        for name in ['version', 'build-image', 'publish', 'create-release', 'release']:
             with self.subTest(name=name):
                 p = app(release='v{version}')
                 p['checks'] = {name: {'script': ['true']}}
                 p['workflows']['push'] = {'checks': [name], 'build': ['container']}
                 p['release']['create'] = {}
-                if name == 'publish':
+                if name in {'publish', 'release'}:
                     p['workflows']['release']['checks'] = [name]
+                if name == 'publish':
+                    # Publication is explicit in 0.4; create a real name collision.
+                    p['python'] = {}
+                    p['package'] = {'index': 'internal'}
+                    p['workflows']['release']['publish'] = True
                 with self.assertRaisesRegex(ValueError, 'collision'):
                     compile_projects({'app': p})
 

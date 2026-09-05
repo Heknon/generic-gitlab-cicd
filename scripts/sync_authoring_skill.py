@@ -12,10 +12,10 @@ def main():
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     mappings = {
-        ROOT / 'docs/ai-authoring-revision-three.md': DEST / 'authoring.md',
+        ROOT / 'docs/ai-authoring.md': DEST / 'authoring.md',
         ROOT / 'docs/cli-reference.md': DEST / 'cli.md',
-        ROOT / 'docs/workflows-revision-one.md': DEST / 'workflows.md',
-        ROOT / 'docs/configuration-sources-revision-two.md': DEST / 'sources.md',
+        ROOT / 'docs/workflows.md': DEST / 'workflows.md',
+        ROOT / 'docs/configuration-sources.md': DEST / 'sources.md',
     }
     for path in (ROOT / 'examples/workflows').glob('*.yml'):
         mappings[path] = DEST / 'examples' / path.name

@@ -92,7 +92,7 @@ token.save!
             for name in ['pyproject.toml', 'README.md']:
                 shutil.copyfile(ROOT / name, context / name)
             shutil.copytree(ROOT / 'generic_ci', context / 'generic_ci', ignore=shutil.ignore_patterns('__pycache__'))
-            (context / 'Dockerfile').write_text('ARG BASE\nFROM ${BASE}\nRUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*\nCOPY . /toolkit\nRUN pip install --no-cache-dir /toolkit\n')
+            (context / 'Dockerfile').write_text('ARG BASE\nFROM ${BASE}\nRUN apt-get update && apt-get install -y --no-install-recommends git bash ca-certificates && rm -rf /var/lib/apt/lists/*\nCOPY . /toolkit\nRUN pip install --no-cache-dir /toolkit\n')
             self.docker('build', '--build-arg', 'BASE=' + self.args.runtime_base, '-t', self.runtime, str(context), timeout=600)
         self.docker('volume', 'create', '--label', 'com.generic-ci.e2e=true', self.volume)
         self.docker('run', '-d', '--name', self.runner, '--label', 'com.generic-ci.e2e=true', '--network', 'host',
@@ -116,7 +116,7 @@ token.save!
     def run_case(self, scenario):
         is_mr = scenario == 'merge-request'
         underlying = 'handoff' if is_mr or scenario == 'manual-gate' else scenario
-        event = 'merge-request' if is_mr else 'push'
+        event = 'release' if scenario.startswith('release-') else 'merge-request' if is_mr else 'push'
         project = self.api('POST', '/projects', {'name': self.prefix + '-' + scenario, 'visibility': 'private',
                                                'initialize_with_readme': True, 'default_branch': 'main'})
         pid = project['id']; self.register(pid)
@@ -136,11 +136,14 @@ token.save!
             self.commit(pid, actions, 'fixture baseline [skip ci]')
         sha = self.commit(pid, [{'action': 'update', 'file_path': 'producer/README', 'content': 'changed\n'}],
                           'exercise ' + scenario, branch='candidate' if is_mr else 'main', start_branch='main' if is_mr else None)
+        if scenario.startswith('release-'):
+            self.api('POST', f'/projects/{pid}/protected_tags', {'name': 'fixture/*', 'create_access_level': 40})
+            self.api('POST', f'/projects/{pid}/repository/tags', {'tag_name': 'fixture/v1.0.0', 'ref': sha})
         if is_mr:
             self.api('POST', f'/projects/{pid}/merge_requests', {'source_branch': 'candidate', 'target_branch': 'main', 'title': 'E2E candidate'})
         source = 'merge_request_event' if is_mr else 'push'
         pipeline = self.wait('pipeline creation', lambda: next((p for p in self.api('GET', f'/projects/{pid}/pipelines?sha={sha}')
-                                                              if p['source'] == source), None))
+                                                              if p['source'] == source and (p['ref'] == 'fixture/v1.0.0' if scenario.startswith('release-') else True)), None))
         pipeline_id = pipeline['id']
         def observe():
             value = self.api('GET', f'/projects/{pid}/pipelines/{pipeline_id}')
@@ -162,20 +165,23 @@ token.save!
                 continue
             trace = self.api('GET', f'/projects/{pid}/jobs/{job["id"]}/trace', raw=True)
             (self.args.output / (scenario + '-' + str(job['id']) + '.log')).write_bytes(trace)
-        if underlying == 'failed-gate':
-            assert outcome['status'] == 'failed' and statuses['push:producer:verify'] == 'failed', evidence
-            assert statuses['push:producer:build'] == 'skipped' and statuses['push:consumer:consume'] == 'skipped', evidence
+        if underlying in {'failed-gate', 'piped-failure', 'release-failure'}:
+            assert outcome['status'] == 'failed' and statuses[event + ':producer:verify'] == 'failed', evidence
+            assert statuses[event + ':producer:build'] == 'skipped' and statuses[event + ':consumer:consume'] == 'skipped', evidence
+            if underlying == 'release-failure':
+                assert statuses['release:consumer:release'] == 'skipped', evidence
         else:
             assert outcome['status'] == 'success', evidence
             assert all(status == 'success' for status in statuses.values()), evidence
-            consumer = next(j for j in rows if j['name'] == event + ':consumer:consume')
-            path = urllib.parse.quote('.ci-out/' + event + ':consumer:consume/receipt.json', safe='/')
             if underlying != 'selection':
+                consumer = next(j for j in rows if j['name'] == event + ':consumer:consume')
+                path = urllib.parse.quote('.ci-out/' + event + ':consumer:consume/receipt.json', safe='/')
                 receipt = json.loads(self.api('GET', f'/projects/{pid}/jobs/{consumer["id"]}/artifacts/{path}', raw=True))
                 assert receipt['status'] == 'passed' and receipt['commit'] == sha, receipt
+                if underlying == 'release-completion':
+                    assert statuses['release:producer:release'] == statuses['release:consumer:release'] == 'success', evidence
             else:
-                trace = self.api('GET', f'/projects/{pid}/jobs/{consumer["id"]}/trace', raw=True).decode()
-                assert 'Project not selected' in trace and 'unexpected-consumer' not in trace, trace
+                assert event + ':consumer:consume' not in statuses, evidence
         return evidence
 
     def cleanup(self):

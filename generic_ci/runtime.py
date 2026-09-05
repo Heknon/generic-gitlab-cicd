@@ -47,7 +47,10 @@ def load_config(expected):
     data = json.loads(base64.b64decode(os.environ["TOOLKIT_CONFIG_B64"], validate=True))
     if digest(data) != expected:
         raise ValueError("generated configuration fingerprint mismatch")
-    if data["version"] != __version__:
+    protocol = data.get("runtime_protocol")
+    compatible = (protocol == 2 and data.get("runtime_series") == "0.4"
+                  and Version("0.4.0") <= Version(__version__) < Version("0.5.0"))
+    if not compatible and (protocol is not None or data["version"] != __version__):
         raise ValueError(f"runtime {__version__} does not match compiler {data['version']}; rebuild internal runtime image")
     return data
 
@@ -116,7 +119,7 @@ def commands(lines, cwd, shell, environment=None):
         script = "$ErrorActionPreference='Stop'\n" + "\n".join(line + "\nif ($LASTEXITCODE) { exit $LASTEXITCODE }" for line in lines)
         subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-Command", script], cwd=cwd, env=environment, check=True)
     else:
-        subprocess.run(["sh", "-eu", "-c", "\n".join(lines)], cwd=cwd, env=environment, check=True)
+        subprocess.run(["bash", "-euo", "pipefail", "-c", "\n".join(lines)], cwd=cwd, env=environment, check=True)
 
 
 def collect(root, directory, paths, out):

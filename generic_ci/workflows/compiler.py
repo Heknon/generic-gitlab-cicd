@@ -32,7 +32,8 @@ def event_rule(event, project=None):
     return {'push': '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH',
             'merge-request': '$CI_PIPELINE_SOURCE == "merge_request_event"',
             'manual': '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH',
-            'schedule': '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH'}[event]
+            'schedule': '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH',
+            **{e: '$CI_PIPELINE_SOURCE == ' + json.dumps(e) + ' && $CI_COMMIT_BRANCH' for e in ('api', 'trigger', 'pipeline')}}[event]
 
 
 def compile_pipeline(pipeline, platform, sources=None):
@@ -44,15 +45,20 @@ def compile_pipeline(pipeline, platform, sources=None):
         project['defaults'] = source.defaults.model_dump(exclude_unset=True)
         for key, settings in project['checks'].items():
             explicit = source.checks[key].model_dump(exclude_unset=True)
-            for field in ('image', 'tags', 'timeout', 'variables', 'services', 'parallel', 'artifacts'):
+            for field in ('image', 'tags', 'timeout', 'variables', 'services', 'parallel', 'artifacts', 'cache'):
                 if field not in explicit:
                     settings.pop(field, None)
             if isinstance(settings['dependencies'], dict):
                 settings['dependencies'] = source.checks[key].dependencies.model_dump(exclude_unset=True)
     hosts = infra['allowed_hosts']
-    for value in [*infra['images'].values(), infra['container_builder']['image'], *infra['registries'].values()]:
+    containers_used = any(project['container'] and any(w['build'] is True or
+        isinstance(w['build'], list) and 'container' in w['build'] for w in project['workflows'].values()) for project in projects.values())
+    if containers_used and (not infra['container_builder'] or not infra['registries']):
+        raise ValueError('container builds require platform container-builder and registries')
+    for value in [*infra['images'].values(), *([infra['container_builder']['image']] if infra['container_builder'] else []),
+                  *(infra['registries'].values() if infra['registries'] else [])]:
         allowed_url('https://' + value.split('/')[0], hosts)
-    if infra['registries']['containers'] == infra['registries']['previews']:
+    if infra['registries'] and infra['registries']['containers'].rstrip('/') == infra['registries']['previews'].rstrip('/'):
         raise ValueError('release and preview registries must be distinct repositories')
     for name, project in projects.items():
         for dep in project['depends_on']:
@@ -134,9 +140,13 @@ def compile_pipeline(pipeline, platform, sources=None):
                 nodes[key]['execution'] = merge(infra['defaults'], project['defaults'])
                 refs[event, name + '.' + public] = [key]
                 built.append(key)
-            if event == 'release' or publication:
+            if publication:
                 final = add(f'{event}:{name}:publish', name, event, 'publish', {'publish_package': bool(publication), 'channel': channel}, gates + built)
                 refs[event, name + '.publish'] = [final]
+            if event == 'release':
+                final = add(f'{event}:{name}:release', name, event, 'release', project['release'],
+                            gates + built + (refs[event, name + '.publish'] if publication else []))
+                refs[event, name + '.release'] = [final]
         release = project['release']
         if release and release['require_bump'] and 'merge-request' not in project['workflows']:
             add(f'merge-request:{name}:version', name, 'merge-request', 'version', release)
@@ -149,11 +159,11 @@ def compile_pipeline(pipeline, platform, sources=None):
 
     # Explicit artifact edges never substitute packages. Producers must be selected in that event.
     for key, node in list(nodes.items()):
-        if node['action'] not in {'check', 'application', 'container', 'package', 'publish'}:
+        if node['action'] not in {'check', 'application', 'container', 'package', 'publish', 'release'}:
             continue
         requested = node['settings'].get('needs', [])
-        if node['action'] == 'publish' and node['event'] == 'release':
-            requested = [dep + '.publish' for dep in projects[node['project']]['release']['needs']]
+        if node['action'] in {'release', 'publish'} and node['event'] == 'release':
+            requested = [dep + '.release' for dep in projects[node['project']]['release']['needs']]
         for ref in requested:
             ref = ref if '.' in ref else node['project'] + '.' + ref
             if (node['event'], ref) not in refs:
@@ -167,6 +177,8 @@ def compile_pipeline(pipeline, platform, sources=None):
     for name, deployment in p['deployments'].items():
         if deployment['target'] not in infra['targets']:
             raise ValueError(f'{name}: unknown target {deployment["target"]}')
+        if 'merge-request' in deployment['workflows'] and infra['targets'][deployment['target']]['production']:
+            raise ValueError(f'{name}: MR previews require a nonproduction target')
         chart = deployment['chart']
         for source in ('repository', 'oci'):
             if chart[source]:
@@ -194,8 +206,12 @@ def compile_pipeline(pipeline, platform, sources=None):
                 condition = '(' + condition + ') && $CI_MERGE_REQUEST_SOURCE_PROJECT_ID == $CI_PROJECT_ID'
             key = f'{event}:deploy:{name}'
             prior = producers[:]
+            if event == 'release':
+                for binding in deployment['images']:
+                    owner = binding['from_'].split('.')[0]
+                    prior.extend(refs[event, owner + '.release'])
             if behavior['when'] == 'manual':
-                approval = add(f'{event}:approve:{name}', None, event, 'approve', deployment, producers, condition=condition, deployment=name)
+                approval = add(f'{event}:approve:{name}', None, event, 'approve', deployment, prior[:], condition=condition, deployment=name)
                 prior.append(approval)
             before_dependencies = prior[:]
             for ref in deployment['before']['checks']:
@@ -243,31 +259,34 @@ def compile_pipeline(pipeline, platform, sources=None):
         visit(key)
     if len(nodes) + 1 > infra['max_jobs']:
         raise ValueError('generated job count exceeds platform max-jobs')
-    payload = {'version': __version__, 'format': 'workflows-v1', 'pipeline': p, 'platform': infra, 'nodes': nodes, 'sources': sources or {}}
+    payload = {'version': __version__, 'runtime_protocol': 2, 'runtime_series': '0.4', 'format': 'workflows-v1', 'pipeline': p, 'platform': infra, 'nodes': nodes, 'sources': sources or {}}
     fingerprint = digest(payload)
     encoded = base64.b64encode(json.dumps(payload, sort_keys=True).encode()).decode()
     if len(encoded) > 100000:
         raise ValueError('execution configuration exceeds 100 KB; split project groups')
-    control = infra['images'].get('control', infra['images'].get('python'))
+    control = next((infra['images'][role] for role in ('control', 'python', 'node', 'bun') if infra['images'].get(role)), None)
     if not control:
-        raise ValueError('platform images.control or images.python is required for the planner')
+        raise ValueError('platform requires a prepared control, python, node or bun image for the planner')
     output = {'stages': ['prepare', 'delivery'], 'workflow': {'rules': [
         {'if': '$CI_PIPELINE_SOURCE == "merge_request_event"'},
         {'if': '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TAG'},
         {'if': '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS', 'when': 'never'},
         {'if': '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH'},
         {'if': '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH'},
-        {'if': '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH'}]},
+        {'if': '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH'},
+        *[{'if': '$CI_PIPELINE_SOURCE == ' + json.dumps(e) + ' && $CI_COMMIT_BRANCH'} for e in ('api', 'trigger', 'pipeline')]]},
         'variables': {**infra['variables'], 'TOOLKIT_CONFIG_B64': encoded},
         'toolkit-plan': {'stage': 'prepare', 'image': control, 'tags': infra['defaults']['tags'] or [],
                          'script': [f'python -m generic_ci.workflows.runtime plan {fingerprint}'],
                          'artifacts': {'paths': ['.ci-out/plan.json']}}}
+    from .selection import native_paths
+    selection_paths = {event: native_paths(payload, event) for event in ('push', 'merge-request')}
     for key, node in nodes.items():
         project = projects.get(node['project'], {})
         role = 'bun' if (project.get('node') or {}).get('package_manager') == 'bun' else 'node' if project.get('node') else 'python'
         if node['action'] in {'deploy', 'stop'}:
             role = 'helm'
-        if node['action'] in {'create-release', 'version', 'publish', 'approve'}:
+        if node['action'] in {'create-release', 'version', 'publish', 'approve', 'release'}:
             role = 'control' if node['action'] != 'publish' else role
         ex = node['execution']
         if not ex.get('image') and role not in infra['images'] and role != 'control' and node['action'] != 'container':
@@ -286,14 +305,24 @@ def compile_pipeline(pipeline, platform, sources=None):
         rule = {'if': condition}
         if node['action'] in {'create-release', 'stop', 'approve'}:
             rule.update(when='manual', allow_failure=node['action'] == 'stop')
-        job = {'stage': 'delivery', 'image': image, 'tags': tags, 'rules': [rule],
+        rules = [rule]
+        if node['event'] in selection_paths:
+            # Overrides can select unrelated projects; let the planner resolve their scope.
+            override = '$CI_DEPENDENCY_REPO || $CI_DEPENDENCY_OVERRIDES || $CI_DEPENDENCY_FILE'
+            rules = [{**rule, 'if': '(' + condition + ') && (' + override + ')'},
+                     {**rule, 'changes': {'paths': selection_paths[node['event']][key]}}]
+        job = {'stage': 'delivery', 'image': image, 'tags': tags, 'rules': rules,
                'script': [f'python -m generic_ci.workflows.runtime run {key} {fingerprint}'],
                'needs': [{'job': 'toolkit-plan', 'artifacts': True}] + [{'job': d, 'artifacts': True, 'optional': True} for d in sorted(set(node['needs']))],
                'artifacts': merge(ex.get('artifacts', {}), {'when': 'always'}), 'variables': ex.get('variables', {}), 'retry': 0}
         job['artifacts']['paths'] = list(dict.fromkeys(job['artifacts'].get('paths', []) + [f'.ci-out/{key}/']))
-        for field in ('timeout', 'services'):
+        for field in ('timeout', 'services', 'cache'):
             if ex.get(field) is not None:
-                job[field] = ex[field]
+                if field == 'cache':
+                    from .models import Cache
+                    job[field] = Cache.model_validate(ex[field]).model_dump(exclude_none=True, by_alias=True)
+                else:
+                    job[field] = ex[field]
         if node['action'] in {'deploy', 'stop'}:
             target = infra['targets'][node['settings']['target']]
             release = target['release'] or node['deployment']
@@ -307,8 +336,8 @@ def compile_pipeline(pipeline, platform, sources=None):
                 job['environment'] = {'name': env, 'action': 'stop'}
                 job['needs'] = []
                 job['variables'] = {'GIT_STRATEGY': 'none'}
-        if node['action'] in {'create-release', 'publish'}:
-            job['resource_group'] = 'release/' + node['project']
+        if node['action'] in {'create-release', 'publish', 'release'}:
+            job['resource_group'] = 'release/' + (digest(project['release']['tag'])[:16] if node['action'] == 'release' else node['project'])
         output[key] = job
     for key in ['toolkit-plan', *nodes]:
         if not output[key].get('tags'):

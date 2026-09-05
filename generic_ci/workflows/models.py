@@ -13,6 +13,29 @@ class Node(Model):
     workspace: str | None = Field(default=None, description='Explicit repository-relative workspace root; otherwise discover membership.')
     _path = field_validator('workspace')(lambda v: relative(v) if v is not None else v)
 
+class CacheKey(Model):
+    files: list[str] = Field(min_length=1, max_length=2)
+    prefix: str | None = None
+    _paths = field_validator('files')(lambda v: [relative(p) for p in v])
+
+
+class Cache(Model):
+    key: str | CacheKey
+    paths: list[str] = Field(min_length=1)
+    policy: Literal['pull', 'push', 'pull-push'] = 'pull-push'
+
+    @field_validator('paths')
+    @classmethod
+    def download_paths(cls, values):
+        from pathlib import PurePosixPath
+        for value in values:
+            relative(value)
+            parts = PurePosixPath(value).parts
+            if not parts or any(p in {'.git', '.ci-out', '.venv', 'node_modules'} for p in parts) or any(c in parts[0] for c in '*?['):
+                raise ValueError('cache downloads in a named directory; never cache repository root, environments, Git metadata or .ci-out receipts')
+        return values
+
+
 class Execution(Model):
     image: str | None = None
     tags: list[str] | None = None
@@ -21,6 +44,7 @@ class Execution(Model):
     services: list[str] | None = None
     parallel: dict | None = None
     artifacts: dict = Field(default_factory=dict)
+    cache: Cache | None = Field(default=None, description="Native GitLab cache mapping; paths are repository-relative. Cache downloads, not prepared environments or receipts.")
     @field_validator('variables')
     @classmethod
     def variables_safe(cls, v):
@@ -84,6 +108,7 @@ class CreateRelease(Model):
 class Release(Model):
     version: VersionSource | None = None
     require_bump: bool = True
+    gitlab: bool = Field(default=False, description='Create a GitLab Release after successful delivery; requires TOOLKIT_RELEASE_TOKEN.')
     tag: str
     create: CreateRelease | None = None
     needs: list[str] = Field(default_factory=list, description='Other projects whose matching release publication must finish first.')
@@ -99,7 +124,7 @@ class Workflow(Model):
     build: bool | list[Literal['application', 'container', 'package']] = False
     publish: bool | Publication = False
 
-Event = Literal['push', 'merge-request', 'release', 'manual', 'schedule']
+Event = Literal['push', 'merge-request', 'release', 'manual', 'schedule', 'api', 'trigger', 'pipeline']
 
 class Project(Model):
     path: str = '.'
@@ -115,6 +140,15 @@ class Project(Model):
     depends_on: list[Name] = Field(default_factory=list, description='Changes to these projects select this consumer. Installation follows package metadata.')
     watch: list[str] = Field(default_factory=list)
     _paths = field_validator('path')(relative)
+    @field_validator('watch')
+    @classmethod
+    def watch_patterns(cls, values):
+        for value in values:
+            relative(value)
+            if '{' in value or '}' in value or value.startswith('./') or '//' in value:
+                raise ValueError('watch uses repository-relative *, **, ?, or bracket globs; braces and ./ are unsupported')
+        return values
+
     @model_validator(mode='after')
     def ecosystem(self):
         if self.python is not None and self.node is not None:
@@ -214,8 +248,8 @@ class Platform(Model):
     version: Literal[1] = 1
     defaults: Execution = Field(default_factory=Execution)
     images: dict[str, str] = Field(description='Prepared images for python, node, bun, helm, and optional control role; all include toolkit Python runtime.')
-    container_builder: Builder
-    registries: Registries
+    container_builder: Builder | None = None
+    registries: Registries | None = None
     allowed_hosts: list[str] = Field(min_length=1)
     targets: dict[Name, Target] = Field(default_factory=dict)
     variables: dict[str, str] = Field(default_factory=dict)
