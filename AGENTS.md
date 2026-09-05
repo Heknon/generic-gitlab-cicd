@@ -46,3 +46,11 @@
 - Chart 2.x uses OpenShift Routes and repository/tag images. TLS settings map directly to Route fields, including certificate, key, caCertificate and destinationCACertificate.
 - Keep chart values examples, schema and workflow image bindings aligned. Buildah still emits digest evidence; legacy digest-only adapters target chart 1.x.
 - Run chart render tests with Helm available, plus strict lint. Certificate examples contain placeholders only; do not claim a live OpenShift rollout from local renders.
+
+## Test layers and cost
+
+- Follow docs/testing-revision-one.md. Use affected unittest classes and `python tools/testing/local.py --scenario NAME` while fixing; run the full inexpensive suite before finalizing.
+- `npm ci --ignore-scripts` installs the pinned maintainer-only gitlab-ci-local tool. Local pipeline tests use isolated workspaces and artifacts; never disable schema validation or receipt assertions to get a pass.
+- Real GitLab E2E is deliberate: workflow dispatch or the same-repository PR label `run-gitlab-e2e`. Remove the label after qualification to avoid expensive runs on later commits. No nightly or broad matrix by default.
+- E2E requires Docker; missing Docker means not run, never passed. The native manual-gate fixture is not evidence of a Helm rollout. Preserve exact scenario/commit/version evidence and keep failed expectations independent from implementation.
+- Helm must be present in release validation; do not count skipped chart tests as a successful release gate.

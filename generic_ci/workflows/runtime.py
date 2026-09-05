@@ -70,16 +70,28 @@ def make_plan(data, root, expected):
         raise ValueError('candidate overrides are forbidden in release workflows')
     for c in candidates:
         selected.update(c['projects'])
-    # Complete deployments and fresh previews need a full image baseline.
-    for deployment in data['pipeline']['deployments'].values():
-        owners = {binding['from_'].split('.')[0] for binding in deployment['images']}
-        if event in deployment['workflows'] and owners & selected and (event == 'merge-request' or deployment['update'] == 'complete'):
-            selected.update(owners)
-    # Artifact producer closure is separate from change propagation.
+    # Close over active deployment checks as well as ordinary project jobs.
+    # Overlapping deployments can activate one another, regardless of declaration order.
     while True:
-        more = selected | {data['nodes'][dep]['project'] for n in data['nodes'].values()
-                           if n['event'] == event and n['project'] in selected for dep in n['needs']
-                           if data['nodes'][dep]['project'] is not None}
+        more = set(selected)
+        active_deployments = set()
+        for name, deployment in data['pipeline']['deployments'].items():
+            owners = {binding['from_'].split('.')[0] for binding in deployment['images']}
+            if event in deployment['workflows'] and owners & selected:
+                active_deployments.add(name)
+                if event == 'merge-request' or deployment['update'] == 'complete':
+                    more.update(owners)
+        for node in data['nodes'].values():
+            active = node['deployment'] in active_deployments if node['deployment'] else node['project'] in selected
+            if node['event'] != event or not active:
+                continue
+            for dep in node['needs']:
+                producer = data['nodes'][dep]
+                deployment = data['pipeline']['deployments'].get(node['deployment'])
+                if deployment and event == 'release' and deployment['update'] == 'partial' and producer['action'] == 'container':
+                    continue
+                if producer['project'] is not None:
+                    more.add(producer['project'])
         if more == selected:
             break
         selected = more

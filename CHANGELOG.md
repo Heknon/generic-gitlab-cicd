@@ -1,3 +1,12 @@
+# 0.3.2
+
+- Reject generated job-name collisions and empty check matrices; omit empty runner tags.
+- Close deployment selection over contextual artifacts and overlapping deployments; reject incompatible complete-release tag conventions.
+- Recover shallow Git history for forward deployment checks while continuing to reject rollback/nonlinear updates.
+- Preserve script shell state and Git dependency subdirectories in image wheelhouses.
+- Add regression tests, pinned gitlab-ci-local execution scenarios and deliberate disposable GitLab/Runner E2E tooling.
+- Require Helm and local pipeline validation in the PyPI release workflow.
+
 # Changelog
 
 ## 1.0.0 — revision one

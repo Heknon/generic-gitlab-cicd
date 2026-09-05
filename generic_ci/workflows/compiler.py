@@ -69,11 +69,12 @@ def compile_pipeline(pipeline, platform, sources=None):
         project_visit(name, [])
 
     def add(key, project, event, action, settings, needs=(), execution=None, condition=None, deployment=None):
-        if key in nodes:
-            return key
-        nodes[key] = dict(project=project, event=event, action=action, settings=settings,
+        candidate = dict(project=project, event=event, action=action, settings=settings,
                           needs=list(needs), execution=execution or {}, condition=condition,
                           deployment=deployment)
+        if key in nodes and nodes[key] != candidate:
+            raise ValueError(f'generated job name collision: {key}; rename the user check or project')
+        nodes[key] = candidate
         return key
 
     def check(name, key, event, context=None):
@@ -174,6 +175,12 @@ def compile_pipeline(pipeline, platform, sources=None):
         if any(a == b or a.startswith(b + '.') or b.startswith(a + '.') for i, a in enumerate(paths) for b in paths[i+1:]):
             raise ValueError(f'{name}: overlapping image mappings')
         for event, behavior in deployment['workflows'].items():
+            if event == 'release' and deployment['update'] == 'complete':
+                tags = {projects[b['from_'].split('.')[0]]['release']['tag']
+                        for b in deployment['images']
+                        if b['from_'].split('.')[0] in projects and projects[b['from_'].split('.')[0]]['release']}
+                if len(tags) > 1:
+                    raise ValueError(f'{name}: complete release deployment requires a coordinated shared release tag; use partial for independent tags')
             producers = []
             conditions = []
             for binding in deployment['images']:
@@ -303,4 +310,7 @@ def compile_pipeline(pipeline, platform, sources=None):
         if node['action'] in {'create-release', 'publish'}:
             job['resource_group'] = 'release/' + node['project']
         output[key] = job
+    for key in ['toolkit-plan', *nodes]:
+        if not output[key].get('tags'):
+            output[key].pop('tags', None)
     return output, payload

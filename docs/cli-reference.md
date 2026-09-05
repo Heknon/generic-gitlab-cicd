@@ -92,3 +92,7 @@ generic-ci render --check -o .gitlab-ci.yml --offline
 ```
 
 Run it in a job with the matching CLI and pinned source cache available. This checks synchronization only; it does not replace GitLab CI Lint or executing the pipeline. Teams that prefer a hook that never modifies files can use this --check command as the hook entry instead and render explicitly when it fails.
+
+## Runtime validation changes in 0.3.2
+
+Selected checks cannot have an empty matrix or collide with generated job names such as version/build-image/publish. Complete release deployments require a shared tag convention; use partial updates for independently tagged images with an existing baseline. Entries in one check/build script execute in one shell, preserving exports and working-directory changes. Deployment ancestry checks fetch missing shallow history from origin before deciding whether an update is stale.

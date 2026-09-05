@@ -1,0 +1,50 @@
+name: Fast validation
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fast-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+      - run: python -m pip install . build twine uv setuptools
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate references and unit tests
+        run: |
+          python scripts/sync_embedded.py --check
+          python scripts/sync_authoring_skill.py --check
+          helm version --short
+          python -m unittest discover -s tests -v
+          helm lint charts/generic-app -f examples/helm-values.yaml --strict
+      - name: Local dependency integration
+        run: python tests/integration_uv.py
+      - name: Execute generated pipelines with isolated artifacts
+        run: npm run test:ci-local
+      - name: Distribution validation
+        run: |
+          python -m build
+          python -m twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-pipeline-evidence
+          path: .test-results/local/
+          if-no-files-found: warn

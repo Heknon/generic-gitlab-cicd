@@ -110,11 +110,13 @@ def require_receipt(root, job, expected):
 
 def commands(lines, cwd, shell, environment=None):
     environment = {**os.environ, **(environment or {})}
-    for line in lines:
-        if shell == "powershell":
-            subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; " + line + "; if ($LASTEXITCODE) { exit $LASTEXITCODE }"], cwd=cwd, env=environment, check=True)
-        else:
-            subprocess.run(["sh", "-eu", "-c", line], cwd=cwd, env=environment, check=True)
+    if not lines:
+        return
+    if shell == "powershell":
+        script = "$ErrorActionPreference='Stop'\n" + "\n".join(line + "\nif ($LASTEXITCODE) { exit $LASTEXITCODE }" for line in lines)
+        subprocess.run(["pwsh", "-NoProfile", "-NonInteractive", "-Command", script], cwd=cwd, env=environment, check=True)
+    else:
+        subprocess.run(["sh", "-eu", "-c", "\n".join(lines)], cwd=cwd, env=environment, check=True)
 
 
 def collect(root, directory, paths, out):
@@ -186,6 +188,9 @@ for d in m.distributions():
  source=json.loads(d.read_text('direct_url.json') or '{}')
  url=source.get('url')
  if source.get('vcs_info'): url='git+'+url+'@'+source['vcs_info']['commit_id']
+ if source.get('subdirectory') and url:
+  from urllib.parse import quote
+  url += '#subdirectory='+quote(source['subdirectory'], safe='/')
  rows.append(d.metadata['Name']+' @ '+url if url else d.metadata['Name']+'=='+d.version)
 print('\\n'.join(rows))'''
     requirements = subprocess.check_output([environment["interpreter"], "-c", code, name], text=True)

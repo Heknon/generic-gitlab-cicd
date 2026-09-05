@@ -19,8 +19,8 @@ def variants(native):
     matrix = native.get("parallel")
     if not matrix:
         return [{}]
-    if set(matrix) != {"matrix"} or not isinstance(matrix["matrix"], list):
-        raise ValueError("gitlab.parallel must contain a native matrix list")
+    if set(matrix) != {"matrix"} or not isinstance(matrix["matrix"], list) or not matrix["matrix"]:
+        raise ValueError("gitlab.parallel must contain a nonempty native matrix list")
     result = []
     for row in matrix["matrix"]:
         if not isinstance(row, dict) or not row:
