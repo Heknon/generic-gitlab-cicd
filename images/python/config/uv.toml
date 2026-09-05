@@ -1,0 +1,5 @@
+# System-level non-secret default. Project-level index settings take precedence.
+[[index]]
+name = "internal"
+url = "https://artifactory.example.internal/artifactory/api/pypi/pypi-virtual/simple"
+default = true

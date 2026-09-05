@@ -1,0 +1,4 @@
+*.key
+.env*
+.git
+**/__pycache__

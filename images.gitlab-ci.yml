@@ -1,0 +1,45 @@
+stages:
+- prepare
+- build
+include:
+- local: /templates/container-build.yml
+  inputs:
+    name: python-runtime-validate
+    context: images/python
+    dockerfile-directory: images/python
+    destination: $CI_IMAGES_REPOSITORY/python:$CI_COMMIT_SHA
+    base-image: $PYTHON_BASE_IMAGE
+    rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - when: never
+    dependencies:
+    - runtime-wheelhouse
+- local: /templates/container-build.yml
+  inputs:
+    name: python-runtime-push
+    context: images/python
+    dockerfile-directory: images/python
+    destination: $CI_IMAGES_REPOSITORY/python:$CI_COMMIT_SHA
+    base-image: $PYTHON_BASE_IMAGE
+    push: true
+    rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
+      when: manual
+    - when: never
+    dependencies:
+    - runtime-wheelhouse
+runtime-wheelhouse:
+  stage: prepare
+  image: $PYTHON_BASE_IMAGE
+  script:
+  - test -n "$PIP_INDEX_URL"
+  - 'python -m pip download --only-binary=:all: --require-hashes -r images/python/requirements.lock
+    --dest images/python/wheelhouse/'
+  artifacts:
+    paths:
+    - images/python/wheelhouse/
+    expire_in: 1 day
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_REF_PROTECTED == "true"
+  - when: never

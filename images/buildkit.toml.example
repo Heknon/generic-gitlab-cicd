@@ -1,0 +1,4 @@
+# Supply as the BUILDKIT_CONFIG_FILE GitLab file variable.
+# The certificate path must exist inside the BuildKit job/container.
+[registry."artifactory.example.internal"]
+  ca = ["/etc/ssl/certs/ca-certificates.crt"]

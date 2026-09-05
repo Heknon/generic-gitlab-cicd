@@ -1,0 +1,98 @@
+spec:
+  inputs:
+    name:
+      type: string
+      description: Unique build job name.
+      default: container-build
+    image:
+      type: string
+      description: Internal rootless BuildKit image with corporate registry trust.
+      default: $BUILDKIT_CI_IMAGE
+    context:
+      type: string
+      description: Docker build context path.
+      default: .
+    dockerfile-directory:
+      type: string
+      description: Directory containing Dockerfile.
+      default: .
+    dockerfile:
+      type: string
+      description: Dockerfile name.
+      default: Dockerfile
+    destination:
+      type: string
+      description: Full Artifactory/GitLab repository image reference including immutable
+        tag.
+    base-image:
+      type: string
+      description: Optional BASE_IMAGE Docker build argument.
+      default: ''
+    push:
+      type: boolean
+      description: False validates and exports OCI locally; true pushes to registry.
+      default: false
+    platform:
+      type: string
+      description: Build platforms; multi-architecture needs runner support.
+      default: linux/amd64
+    runner-tags:
+      type: array
+      description: Build-capable runner tags.
+      default: []
+    rules:
+      type: array
+      description: Do not expose push credentials to untrusted jobs.
+      default:
+      - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      - if: $CI_COMMIT_TAG
+      - if: $CI_COMMIT_BRANCH
+    metadata-file:
+      type: string
+      default: build-metadata.json
+      description: Unique root-relative digest metadata artifact per image.
+    dependencies:
+      type: array
+      default: []
+      description: Artifact-producing preparation jobs (for example offline wheelhouse).
+---
+$[[ inputs.name ]]:
+  stage: build
+  image:
+    name: $[[ inputs.image ]]
+    entrypoint:
+    - ''
+  tags: $[[ inputs.runner-tags ]]
+  interruptible: false
+  retry: 0
+  dependencies: $[[ inputs.dependencies ]]
+  rules: $[[ inputs.rules ]]
+  variables:
+    COMPONENT_CONTEXT: $[[ inputs.context ]]
+    COMPONENT_DOCKERFILE_DIR: $[[ inputs.dockerfile-directory ]]
+    COMPONENT_DOCKERFILE: $[[ inputs.dockerfile ]]
+    COMPONENT_DESTINATION: $[[ inputs.destination ]]
+    COMPONENT_BASE_IMAGE: $[[ inputs.base-image ]]
+    COMPONENT_PUSH: enabled-$[[ inputs.push ]]
+    COMPONENT_PLATFORM: $[[ inputs.platform ]]
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
+    COMPONENT_METADATA: $[[ inputs.metadata-file ]]
+  script:
+  - "set -eu\numask 077\nexport DOCKER_CONFIG=\"$(mktemp -d)\"\ntrap 'rm -rf \"$DOCKER_CONFIG\"\
+    ' EXIT\nif [ -n \"${REGISTRY_AUTH_FILE:-}\" ]; then cp \"$REGISTRY_AUTH_FILE\"\
+    \ \"$DOCKER_CONFIG/config.json\"; fi\nif [ -n \"${BUILDKIT_CONFIG_FILE:-}\" ];\
+    \ then\n  cp \"$BUILDKIT_CONFIG_FILE\" \"$DOCKER_CONFIG/buildkit.toml\"\n  export\
+    \ BUILDKITD_FLAGS=\"$BUILDKITD_FLAGS --config $DOCKER_CONFIG/buildkit.toml\"\n\
+    fi\nset -- build --frontend dockerfile.v0 --local \"context=$CI_PROJECT_DIR/$COMPONENT_CONTEXT\"\
+    \ --local \"dockerfile=$CI_PROJECT_DIR/$COMPONENT_DOCKERFILE_DIR\" --opt \"filename=$COMPONENT_DOCKERFILE\"\
+    \ --opt \"platform=$COMPONENT_PLATFORM\" --metadata-file \"$CI_PROJECT_DIR/$COMPONENT_METADATA\"\
+    \nif [ -n \"$COMPONENT_BASE_IMAGE\" ]; then set -- \"$@\" --opt \"build-arg:BASE_IMAGE=$COMPONENT_BASE_IMAGE\"\
+    ; fi\nif [ \"$COMPONENT_PUSH\" = enabled-true ]; then\n  test \"${CI_COMMIT_REF_PROTECTED:-false}\"\
+    \ = true || { echo 'Push requires a protected ref'; exit 1; }\n  : \"${REGISTRY_AUTH_FILE:?Provide\
+    \ registry authentication file}\"\n  set -- \"$@\" --output \"type=image,name=$COMPONENT_DESTINATION,push=true\"\
+    \nelse\n  set -- \"$@\" --output \"type=oci,dest=$CI_PROJECT_DIR/image.oci.tar\"\
+    \nfi\nbuildctl-daemonless.sh \"$@\""
+  artifacts:
+    paths:
+    - $[[ inputs.metadata-file ]]
+    expire_in: 30 days
