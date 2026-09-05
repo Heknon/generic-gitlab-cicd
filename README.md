@@ -151,3 +151,7 @@ The integration test uses local Git repositories and URL rewriting; it does not 
 - uv configuration: https://docs.astral.sh/uv/reference/settings/
 - PyPI trusted publishing: https://docs.pypi.org/trusted-publishers/using-a-publisher/
 - Helm upgrade: https://helm.sh/docs/helm/helm_upgrade/
+
+## Publishing this toolkit to PyPI
+
+The PyPI distribution is `generic-gitlab-cicd`; its CLI remains `generic-ci`. The [Publish to PyPI workflow](.github/workflows/publish.yml) uses Trusted Publishing on a published GitHub release or a manual run. See [publisher configuration and release steps](docs/pypi-release.md).

@@ -3,9 +3,10 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "generic-gitlab-ci"
+name = "generic-gitlab-cicd"
 version = "0.3.1"
 description = "Validated project configuration and reproducible GitLab delivery pipelines"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.10,<3", "PyYAML>=6,<7", "tomlkit>=0.13,<1", "packaging>=25,<27"]
 
