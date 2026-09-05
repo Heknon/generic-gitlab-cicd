@@ -1,159 +1,189 @@
-Testing commands and the local/E2E split: [testing — revision one](docs/testing-revision-one.md).
+# Generic GitLab CI/CD
 
-Start with the [documentation map](docs/README.md), [AI authoring guide](docs/ai-authoring-revision-three.md), or portable [generic-ci-authoring skill](skills/generic-ci-authoring/SKILL.md).
+**Define your projects and checks. Generate a reviewable GitLab pipeline.**
 
-Organization defaults and Git-backed starter templates are now available: see [configuration sources — revision two](docs/configuration-sources-revision-two.md).
+Generic GitLab CI/CD is a Python toolkit that turns a small delivery configuration into a committed `.gitlab-ci.yml`. It connects your existing test commands, application builds, package publication, container builds, and Helm deployments while keeping infrastructure settings separate from application configuration.
 
-> Feature-branch workflow interface (0.3.1): see [implemented revision-one guide](docs/workflows-revision-one.md), [configuration examples](examples/workflows), and [JSON Schema](schemas/workflows.schema.json). This is a review build with documented integration gates. Older prototype CLI commands now require `--format legacy`; existing GitLab components remain available.
+The package is named `generic-gitlab-cicd`; the command is `generic-ci`. GitLab and your runners execute the generated pipeline. The CLI validates and generates configuration locally.
 
-# Generic GitLab CI components — revision one
+[Quick start](#quick-start) · [Workflow guide](docs/workflows-revision-one.md) · [CLI reference](docs/cli-reference.md) · [Examples](examples/workflows) · [Documentation](docs/README.md)
 
-A self-contained component repository for GitLab, including an offline-capable runtime-image factory and a generic Kubernetes Helm chart. The recommended Python entry point is `examples/uv-airgap.yml`.
+## Why use it?
 
-This is an implementation to configure and validate on your installation. It has not been run against your GitLab, Artifactory or Kubernetes cluster. Infrastructure addresses, credentials, approved base images and application deployment settings must be supplied by your organization.
+Use this toolkit when several services or repositories share delivery conventions, but each team needs to choose its own checks and release behavior.
 
-## Components
+- **Keep application intent readable.** Name your checks and select them for pushes, merge requests, releases, manual pipelines, or schedules. The toolkit does not insert an assumed test suite.
+- **Reuse platform configuration.** Share runner tags, prepared images, registries, and deployment targets through organization defaults and Git-backed templates.
+- **Connect monorepo work explicitly.** Declare which projects are affected by upstream changes and which jobs need upstream artifacts. Artifact receipts verify the producing commit, pipeline, configuration, and file checksums.
+- **Support internal infrastructure.** Use prepared runtime images, internal package services, and cached configuration sources. Consumer jobs have no automatic public toolkit bootstrap.
+- **Review generated changes before execution.** Commit the generated YAML alongside its inputs; validate configuration and detect generation drift locally or in CI.
 
-| Component | Purpose |
+For a repository with a few standalone jobs, handwritten GitLab CI may be sufficient. This toolkit is most useful when repeated release, dependency, and deployment rules are becoming difficult to maintain consistently.
+
+## How it works
+
+| File | What belongs here |
 | --- | --- |
-| `workflow` | Stages, cancellation of superseded work, suppression of duplicate push/MR pipelines |
-| `task` | Language-neutral lint, test, build or verification commands; reports, caches and artifacts |
-| `uv-test` | Locked uv validation, optional Git dependency replacement and commit provenance |
-| `version-check` | PEP 440 version increase against the current target branch; tag/version matching |
-| `python-package` | Build wheel/sdist once, check metadata, retain distribution artifacts |
-| `python-publish` | Publish those artifacts to PyPI, TestPyPI, GitLab or Artifactory |
-| `container-preview-build` | Same-project MR builds restricted to a dedicated preview repository |
-| `container-build` | Rootless BuildKit build, digest metadata, optional protected-ref registry push |
-| `deploy` / `preview` | Provider-neutral command adapters with deployment locking and preview cleanup |
-| `helm-deploy` / `helm-preview` | Helm rollout with failure rollback and isolated review environments |
-| `release` | Create a GitLab release for an existing protected tag |
+| `delivery.yml` | Projects, commands, workflow selection, builds, and deployments |
+| `ci-platform.yml` | Runtime images, runner tags, registry locations, and deployment targets |
+| `.gitlab-ci.yml` | Generated pipeline; regenerate after editing the inputs |
+| `generic-ci.yml` + `generic-ci.lock.json` | Optional organization source configuration and its pinned commit |
 
-Each YAML file documents its own typed inputs. Include components multiple times with unique job names. Secrets remain GitLab CI variables; they are never component inputs.
+Run `generic-ci validate`, inspect `generic-ci explain`, then run `generic-ci render`. Commit the inputs and generated pipeline together. GitLab executes a planner and the selected runtime jobs using your prepared images.
 
-## Bootstrap
+## Quick start
 
-1. Import this directory into a GitLab project such as `platform/ci-components` on your own GitLab instance. Component includes cannot directly cross to an unrelated GitLab instance; mirror this repository internally.
-2. Configure the variables in `docs/airgap.md`, and supply approved internal Python, BuildKit and Helm runtime images. The repository's own pipeline uses those images. Do not switch all consumers until the runtime images are available.
-3. Adapt non-secret files under `images/python/config/`, add approved CA certificates, and review `images/python/requirements.lock`. Run `images.gitlab-ci.yml` to build the Python runtime from your internal package index and push it to Artifactory. Initial BuildKit and Python base images must already be mirrored and trusted.
-4. Run this repository's validation pipeline. Publish/tag an immutable component version, e.g. `1.0.0`. Optionally mark the project as a CI/CD Catalog resource and create a GitLab release. Consumers may pin a full commit SHA before the first release.
-5. Copy the relevant example as the consuming project's `.gitlab-ci.yml`. Replace `platform/ci-components`, the release ref and deployment placeholders.
-6. Validate the expanded pipeline with your GitLab CI Lint, then run MR, default-branch and protected-tag scenarios before enabling production publishing.
+This example adds push and merge-request tests to an **existing Python project**. It assumes the repository already has a `pyproject.toml`, a committed `uv.lock`, and pytest declared in a dependency group. Replace the test command if your project uses something else.
 
-Use a supported GitLab with CI/CD components and array inputs (GitLab 17+ syntax baseline). The optional native release job also requires a GitLab-compatible glab runtime; verify server/CLI compatibility. Runtime jobs target Linux container runners, not Windows shell runners.
+### 1. Install the CLI
 
-## Minimal uv project
-
-```yaml
-variables:
-  CI_DEPENDENCY_REPO: ""
-  CI_DEPENDENCY_REF: ""
-  CI_DEPENDENCY_PACKAGE: ""
-  CI_DEPENDENCY_OVERRIDES: '[]'
-
-include:
-  - component: $CI_SERVER_FQDN/platform/ci-components/workflow@1.0.0
-  - component: $CI_SERVER_FQDN/platform/ci-components/uv-test@1.0.0
-    inputs:
-      name: api-test
-      repo: $CI_DEPENDENCY_REPO
-      ref: $CI_DEPENDENCY_REF
-      package: $CI_DEPENDENCY_PACKAGE
-      overrides-json: $CI_DEPENDENCY_OVERRIDES
-```
-
-Set `PYTHON_CI_IMAGE` to your internal runtime image. Commit `uv.lock`. Put pytest and application test dependencies in the project's dependency groups. `uv-test` syncs all groups; define mutually compatible groups. Tests run with `uv run --no-sync` so uv does not undo a candidate installation.
-
-## Cross-repository dependencies
-
-For an unreleased dependency, start a pipeline with:
-
-```text
-CI_DEPENDENCY_REPO=https://gitlab.internal/team/shared-sdk.git
-CI_DEPENDENCY_REF=feature/new-api
-CI_DEPENDENCY_PACKAGE=shared-sdk
-```
-
-For several dependencies or a package in a repository subdirectory:
-
-```json
-[
-  {"repo":"https://gitlab.internal/team/sdk.git", "ref":"feature/new-api", "package":"shared-sdk"},
-  {"repo":"https://gitlab.internal/team/core.git", "ref":"0123456789012345678901234567890123456789", "package":"core-utils", "subdirectory":"packages/utils"}
-]
-```
-
-Set that array as `CI_DEPENDENCY_OVERRIDES`. Both mechanisms can be combined if package names do not overlap.
-
-The helper resolves each branch/tag to a commit, applies temporary `tool.uv.override-dependencies`, removes conflicting uv source mappings for the named distribution, re-resolves, and verifies installed `direct_url.json` commit metadata. Original pyproject and lock bytes are restored even if sync fails. A successful override run saves requested refs and actual commits as a provenance artifact. A branch can move between pipelines; use the recorded SHA for reproducible reruns.
-
-The normal path uses `uv sync --locked --all-groups`. The override path deliberately re-resolves and can change transitive dependencies; it tests candidate compatibility rather than certifying the production lock. Overrides must name an installed distribution; a typo or irrelevant package fails verification.
-
-Configure read-only Git authentication in the job's `setup` or runner credential helper. Use credential-free repository URLs. For CI_JOB_TOKEN access, allowlist the consumer project in each dependency project. Restrict the credential helper to the intended host. Do not put credentials in URLs, artifacts, images, or tracked config.
-
-Run a uv workspace from its root; its virtual environment must be `.venv` there. For independent monorepo projects, include one `uv-test` per project and use unique report/provenance paths. Custom UV_PROJECT_ENVIRONMENT layouts require adapting the helper's virtual-environment path.
-
-## Coordinated releases
-
-Candidate testing solves the validation deadlock. It does not make multiple registry publications transactional.
-
-1. Validate the application and dependency candidates together using immutable overrides.
-2. Publish the dependency's real version to the internal package repository.
-3. Update/validate the application's production lock against that registry, with overrides cleared.
-4. Build once, publish/deploy the application, then create its GitLab release.
-
-A dependency package can usually be published before the application is deployed; publishing the wheel does not deploy a running service. For stronger coordination, use an internal candidate repository and promote approved packages before deployment. Two independent GitLab projects still need an orchestration policy; this framework does not promise atomic cross-project rollback. Multi-project trigger/approval coordination is an extension point, not implemented here.
-
-The standard publish and production deploy jobs reject nonempty `CI_DEPENDENCY_*` override variables. Do not hard-code candidate inputs in a production pipeline. Preview artifacts may intentionally contain candidate dependencies; never promote those to production without a clean release validation.
-
-## Versioning, tags and releases
-
-`version-check` reads static `[project].version`. In branch/MR pipelines it fetches the current target branch and requires a strict PEP 440 increase. On tags it requires the tag suffix to match the package version. The default prefix is `v`; use `sdk-v` for independent package tags. Dynamic SCM versions require a custom command via `task`.
-
-Use change rules to restrict bump checks to meaningful package changes if documentation-only MRs should not bump a version. The default checks every selected non-default branch pipeline. `allow-new-package` explicitly permits a manifest absent from the target branch.
-
-Tags are an input to the release pipeline. Create and protect them through your established process; CI does not silently create or push tags. Package publishing and production deployment are blocking manual jobs on protected tags by default. The GitLab release runs last, using `CHANGELOG.md` or a configured notes file. Existing GitLab release retries require deliberate handling; no overwrite or package `--skip-existing` behavior hides duplicate releases.
-
-A tag check validates manifest metadata, not the version assigned by every possible custom build backend. The build defaults use static PEP 621 metadata. Custom build commands should add wheel metadata/version assertions if they derive or rewrite versions.
-
-## Monorepos and cost
-
-`examples/monorepo.yml` demonstrates independent service rules, shared dependency paths and service-specific tag names. Include every shared source/config/lock path that can affect a service; transitive dependency graph discovery is not automatic. `CI_FULL_PIPELINE=true` and schedules run full verification. Tags rebuild all package units in that example, so a release never consumes artifacts from a different pipeline.
-
-The defaults preserve stage barriers: lint → test → build → verify → publish → deploy → release. Jobs use `dependencies` only to select artifacts. No default `needs: []` bypasses validation. All enabled tests must pass before any build proceeds. Stage barriers are conservative across unrelated services; customize explicit DAG dependencies only after keeping release gates intact.
-
-Tests fail normally; only runner/system failures retry once. Deploy/publish operations never retry automatically. Superseded interruptible work can be cancelled. Use `task` cache controls for package download caches, with lockfile-derived keys; keep protected/unprotected cache separation enabled. uv's download cache is safe to rebuild and is not proof of dependency correctness.
-
-## Helm deployment
-
-Use `charts/generic-app`, `examples/helm-values.yaml`, and `docs/kubernetes.md`. Helm manages the application release; Terraform is appropriate for cluster, DNS, network and registry infrastructure outside this repository's scope.
-
-Deploy digest-pinned images from the exact build artifacts. `helm-deploy.image-map-json` maps application names to image repositories and BuildKit metadata files; the helper extracts digests into an overlay passed to Helm. One Helm release may deploy several services, or use separate releases for independently deployable services.
-
-## Validation
+Use Python **3.11 or newer**. From a checkout of this repository, install into an isolated environment:
 
 ```sh
-python -m pip install -r requirements-dev.txt
-python scripts/sync_embedded.py --check
-python -m unittest discover -s tests -v
-python tests/integration_uv.py
-helm lint charts/generic-app -f examples/helm-values.yaml --strict
-helm template smoke charts/generic-app -f examples/helm-values.yaml
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install .
+generic-ci --help
 ```
 
-The integration test uses local Git repositories and URL rewriting; it does not contact a real dependency host or publish anything. The lightweight component expander tests inputs, names and artifact references. It is not GitLab's server-side compiler. Do not interpret local tests as proof that a specific runner, RBAC policy, Artifactory endpoint or cluster deployment works.
+For repeatable organization setup, distribute a versioned wheel through your approved internal package index or wheelhouse. Keep the authoring CLI and the toolkit installed in runner images on the **same version**. This source revision is **0.3.2**; source availability does not imply that version has been published to PyPI.
 
-## Official references
+The install command uses your configured package sources. In an air-gapped environment, prepare the wheel and all dependencies internally first.
 
-- GitLab components: https://docs.gitlab.com/ci/components/
-- GitLab input types: https://docs.gitlab.com/ci/inputs/
-- GitLab environment teardown: https://docs.gitlab.com/ci/environments/
-- Rootless BuildKit: https://docs.gitlab.com/ci/docker/using_buildkit/
-- GitLab releases: https://docs.gitlab.com/user/project/releases/release_cicd_examples/
-- uv overrides: https://docs.astral.sh/uv/concepts/resolution/
-- uv configuration: https://docs.astral.sh/uv/reference/settings/
-- PyPI trusted publishing: https://docs.pypi.org/trusted-publishers/using-a-publisher/
-- Helm upgrade: https://helm.sh/docs/helm/helm_upgrade/
+### 2. Provide the runtime configuration
 
-## Publishing this toolkit to PyPI
+In your **application repository**, create `ci-platform.yml`:
 
-The PyPI distribution is `generic-gitlab-cicd`; its CLI remains `generic-ci`. The [Publish to PyPI workflow](.github/workflows/publish.yml) uses Trusted Publishing on a published GitHub release or a manual run. See [publisher configuration and release steps](docs/pypi-release.md).
+```yaml
+version: 1
+defaults:
+  tags: [internal-linux]
+images:
+  python: registry.example.internal/ci/python-toolkit:0.3.2
+container-builder:
+  engine: buildah
+  image: registry.example.internal/ci/buildah-toolkit:0.3.2
+registries:
+  containers: registry.example.internal/apps
+  previews: registry.example.internal/previews
+allowed-hosts:
+  - registry.example.internal
+  - gitlab.example.internal
+variables:
+  UV_PYTHON_DOWNLOADS: never
+```
+
+**Replace the example addresses and tags with your platform's values.** These images are placeholders, not publicly available toolkit images. The Python image needs Python, Git, uv, the matching toolkit, and your internal package/CA configuration. The builder image needs Buildah and the matching Python toolkit runtime. Builder and registry settings are required by the platform schema even though this test-only example does not build or push an image.
+
+If your organization already provides a platform file or configuration source, use it. Platform maintainers can start with the [image-factory setup guide](starters/image-factory/CI-SETUP.md). Installing the CLI on your laptop does not prepare runner images.
+
+### 3. Define the checks
+
+Create `delivery.yml` in the application repository:
+
+```yaml
+version: 1
+projects:
+  app:
+    path: .
+    python:
+      groups: all
+    checks:
+      unit:
+        script:
+          - uv run --no-sync pytest
+    workflows:
+      push:
+        checks: [unit]
+      merge-request:
+        checks: [unit]
+```
+
+`path` is relative to the repository root. Commands run in that project directory. Python dependency preparation uses the committed lockfile; `--no-sync` prevents the test command from resynchronizing the environment. With `groups: all`, dependency groups must be mutually compatible.
+
+This configuration selects `unit` for push and merge-request workflows. Push pipelines are suppressed when an open MR takes their place. It does not publish a package, build an image, or deploy an application.
+
+### 4. Validate, inspect, and generate
+
+Run these commands from the application repository using the installed CLI:
+
+```sh
+generic-ci validate
+generic-ci explain -o ci-explain.json
+generic-ci render -o .gitlab-ci.yml
+generic-ci render --check -o .gitlab-ci.yml
+```
+
+Review `ci-explain.json` and the generated jobs, then commit `delivery.yml`, `ci-platform.yml`, and `.gitlab-ci.yml`. The explanation file is optional diagnostic output.
+
+Validate the generated YAML with **your GitLab CI Lint**, push the branch, and inspect the first pipeline. Local validation checks configuration and the job graph; it does not run pytest or check that a registry image exists. Your runner must match the configured tags and be able to pull the runtime image and reach the configured internal services.
+
+After changing a command, platform setting, or source lock, render again. Use `generic-ci render --check -o .gitlab-ci.yml` in CI to detect stale generated YAML.
+
+## Add the delivery features you need
+
+| Goal | Configuration / next step |
+| --- | --- |
+| Test Node, pnpm, or Bun projects | Declare `node.package-manager`, commit the corresponding lockfile, and use your existing commands; see the [workflow guide](docs/workflows-revision-one.md) |
+| Build application artifacts | Set `build.script` and `build.outputs`; select `build: [application]` in the workflow |
+| Retest downstream projects | Add project `depends-on: [sdk]`; this propagates change selection |
+| Transfer generated files to another job | Add check/build `needs: [sdk.build]`; the producer must be enabled in the same event |
+| Build and push containers | Configure `container` and select `build: [container]`; the default builder is Buildah |
+| Publish Python or npm-compatible packages | Configure `package` and workflow `publish`; see [publication behavior](docs/workflows-revision-one.md#package-publication--revision-four) |
+| Coordinate releases | Configure project versions, tag conventions, and optional `release.needs`; see the [release workflow](docs/workflows-revision-one.md#version-bumps-and-release-button) |
+| Deploy to OpenShift | Configure a Helm deployment, target, values, and image bindings; start with the [deployment example](examples/workflows/delivery.yml) and [chart values](examples/helm-values.yaml) |
+
+`depends-on` and `needs` have different jobs: the first selects affected projects; the second transfers explicit same-event outputs. Neither implicitly installs an unreleased package. Candidate dependency testing has a separate contract described in the [workflow guide](docs/workflows-revision-one.md).
+
+## Share organization defaults
+
+An organization source can provide platform defaults and starter templates. Initialize from a reviewed source revision:
+
+```sh
+generic-ci init --repo ssh://git@gitlab.example.internal/platform/ci-config.git \
+  --ref v1.0.0 --template python-service
+```
+
+The repository, ref, and template name above are examples; the source must contain the toolkit's source manifest. Initialization copies starter files and records an exact source commit. Commit the resulting descriptor and lockfile. Later source updates change inherited defaults while preserving consumer-owned template files.
+
+For disconnected authoring, cache the locked source or import a Git bundle, then render with `--offline`. This flag controls configuration-source acquisition; it does not enforce network isolation inside application jobs. See [configuration sources](docs/configuration-sources-revision-two.md) for source layout, registration, updates, and offline setup.
+
+## OpenShift deployment
+
+The bundled [generic-app chart](charts/generic-app) supports multiple applications, Services, OpenShift Routes with TLS, probes, resources, ports, volumes/mounts, and pod labels/annotations. Images use **repository + tag**; Buildah also records the pushed digest as evidence. Security contexts are configurable, with cluster defaults applying when unset.
+
+Helm deployments support complete updates and partial updates that preserve unchanged service images. Partial updates require a compatible existing baseline; chart or configuration changes require a complete deployment. Production requires a protected ref, and candidate dependency runs cannot update persistent deployments.
+
+You supply registry credentials, CA trust, a kubeconfig, namespace resources, and application values. The toolkit does not provision the cluster, issue certificates, create PVCs automatically, or make multi-project publication transactional. Keep release image tags immutable: the shared chart uses `IfNotPresent`.
+
+## Existing component users
+
+The repository also contains [low-level GitLab CI/CD components](templates) and the older compiler, available through `--format legacy`. They are separate interfaces from the workflow configuration above. New users should start with the CLI walkthrough.
+
+Mirror components into your GitLab instance and pin includes to an immutable revision. Consult the [component air-gap guide](docs/airgap.md) for setup. Older BuildKit/digest-only Helm adapters target chart 1.x; the current chart uses OpenShift Routes and repository/tag values. Do not mix those contracts without migrating the configuration.
+
+## Development and validation
+
+From a toolkit checkout with Python, Git, Node/npm, rsync, and Helm available:
+
+```sh
+python -m pip install . build twine uv setuptools
+npm ci --ignore-scripts --no-audit --no-fund
+python scripts/sync_embedded.py --check
+python scripts/sync_authoring_skill.py --check
+python -m unittest discover -s tests -v
+npm run test:ci-local
+```
+
+The local pipeline fixtures use pinned `gitlab-ci-local`. Real GitLab/Runner E2E runs are deliberate, through workflow dispatch or an opt-in PR label. Use focused tests while iterating; see [testing commands and evidence](docs/testing-revision-one.md) for prerequisites, integration tests, release checks, and scenario selection.
+
+Version 0.3.2 passed [fast CI](https://github.com/Heknon/generic-gitlab-cicd/actions/runs/33975049919) and [six real GitLab E2E scenarios](https://github.com/Heknon/generic-gitlab-cicd/actions/runs/33975818144). That evidence covers the tested pipeline fixtures, not deployment to your registry or OpenShift cluster. Qualify Buildah execution, registry access, Route admission, and rollout/rollback on your infrastructure before production use. Workflow runtime execution currently targets Linux; Windows workflow execution is not supported.
+
+## Documentation
+
+- [CLI commands, file ownership, and path rules](docs/cli-reference.md)
+- [Checks, builds, releases, and deployment workflows](docs/workflows-revision-one.md)
+- [Organization configuration sources](docs/configuration-sources-revision-two.md)
+- [AI-assisted authoring and portable skill](docs/ai-authoring-revision-three.md)
+- [Publishing the toolkit to PyPI](docs/pypi-release.md)
+- [Full documentation map](docs/README.md)
