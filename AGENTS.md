@@ -26,3 +26,10 @@
 - Rendering must use the committed source lock, never a moving branch or the user’s global default.
 - Preserve template ownership: source updates change inherited defaults and locks, never consumer files.
 - Test source changes with `python -m unittest discover -s tests -p test_sources.py`; include real Git/bundle tests for cache and pinning behavior.
+
+## AI documentation
+
+- Read docs/ai-authoring-revision-three.md for consumer authoring; docs/cli-reference.md defines CLI/path contracts.
+- The portable authoring skill lives under skills/generic-ci-authoring. Keep it self-contained for installations outside this repository.
+- Update canonical docs/examples/schemas, then run python scripts/sync_authoring_skill.py. CI checks the bundle with --check.
+- Distinguish implemented workflow/source interfaces from historical design documents and the unimplemented MCP server.

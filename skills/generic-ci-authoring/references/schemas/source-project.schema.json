@@ -1,0 +1,51 @@
+{
+  "$defs": {
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "title": "Repository",
+          "type": "string"
+        },
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "ref"
+      ],
+      "title": "Source",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "source": {
+      "$ref": "#/$defs/Source"
+    },
+    "delivery": {
+      "default": "delivery.yml",
+      "title": "Delivery",
+      "type": "string"
+    },
+    "platform": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Platform"
+    }
+  },
+  "required": [
+    "source"
+  ],
+  "title": "ProjectConfig",
+  "type": "object"
+}

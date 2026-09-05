@@ -1,0 +1,30 @@
+version: 1
+projects:
+  api:
+    path: apps/api
+    node:
+      package-manager: bun
+    checks:
+      unit:
+        script:
+        - bun test
+    container:
+      dockerfile: Dockerfile
+      context: .
+    release:
+      tag: api/v{version}
+      create: {}
+    workflows:
+      push:
+        checks:
+        - unit
+      merge-request:
+        checks:
+        - unit
+        build:
+        - container
+      release:
+        checks:
+        - unit
+        build:
+        - container

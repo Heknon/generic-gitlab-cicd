@@ -6,6 +6,7 @@ include:
     stage: test
     image: $PYTHON_CI_IMAGE
     commands:
+    - python scripts/sync_authoring_skill.py --check
     - python -m unittest discover -s tests -v
     - python tests/integration_uv.py
 - local: /templates/task.yml

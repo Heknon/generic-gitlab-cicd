@@ -1,0 +1,26 @@
+version: 1
+projects:
+  web:
+    path: apps/web
+    node:
+      package-manager: pnpm
+    checks:
+      types:
+        script:
+        - pnpm run typecheck
+    build:
+      script:
+      - pnpm run build
+      outputs:
+      - dist
+    workflows:
+      push:
+        checks:
+        - types
+        build:
+        - application
+      merge-request:
+        checks:
+        - types
+        build:
+        - application
