@@ -1,0 +1,16 @@
+# Proposed revision-one design; infrastructure credentials are external.
+version: 1
+defaults:
+  tags: [internal-linux]
+images:
+  python: artifactory.internal/ci/python-3.13:2026.09
+  helm: artifactory.internal/ci/helm:2026.09
+container-builder:
+  engine: buildah
+  image: artifactory.internal/ci/buildah:2026.09
+  tags: [image-builder]
+registries:
+  containers: artifactory.internal/apps
+  previews: artifactory.internal/previews
+variables:
+  UV_PYTHON_DOWNLOADS: "never"
