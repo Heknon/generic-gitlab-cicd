@@ -1,0 +1,152 @@
+spec:
+  inputs:
+    name:
+      type: string
+      description: Unique job name, including the service name.
+    image:
+      type: string
+      description: Prepared Python + Git + uv + tomlkit + packaging image.
+      default: $PYTHON_CI_IMAGE
+    directory:
+      type: string
+      description: Working directory relative to the consumer repository root.
+      default: .
+    setup:
+      type: array
+      description: Commands run after changing directory. Use locked dependencies.
+      default: []
+    rules:
+      type: array
+      description: GitLab job rules; final matching rule wins only by order (first match).
+      default:
+      - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      - if: $CI_COMMIT_TAG
+      - if: $CI_COMMIT_BRANCH
+    runner-tags:
+      type: array
+      description: Runner selection tags.
+      default: []
+    timeout:
+      type: string
+      description: Job timeout.
+      default: 30m
+    commands:
+      type: array
+      description: Tests after synchronization; use uv run --no-sync to retain overrides.
+      default:
+      - uv run --no-sync pytest --junitxml=reports/junit.xml
+    repo:
+      type: string
+      description: Candidate dependency HTTPS repository, optional.
+      default: ''
+    ref:
+      type: string
+      description: Branch, tag or full commit SHA.
+      default: ''
+    package:
+      type: string
+      description: Distribution name to replace.
+      default: ''
+    overrides-json:
+      type: string
+      description: JSON array of repo/ref/package/subdirectory objects; supports multiple dependencies.
+      default: '[]'
+    provenance:
+      type: string
+      description: Root-relative provenance artifact; unique for each monorepo job.
+      default: reports/dependency-provenance.json
+    junit:
+      type: array
+      description: Root-relative JUnit files.
+      default:
+      - reports/junit.xml
+---
+$[[ inputs.name ]]:
+  image: $[[ inputs.image ]]
+  tags: $[[ inputs.runner-tags ]]
+  timeout: $[[ inputs.timeout ]]
+  interruptible: true
+  retry:
+    max: 1
+    when:
+    - runner_system_failure
+    - stuck_or_timeout_failure
+  variables:
+    COMPONENT_DIRECTORY: $[[ inputs.directory ]]
+    COMPONENT_DEPENDENCY_REPO: $[[ inputs.repo ]]
+    COMPONENT_DEPENDENCY_REF: $[[ inputs.ref ]]
+    COMPONENT_DEPENDENCY_PACKAGE: $[[ inputs.package ]]
+    COMPONENT_DEPENDENCY_OVERRIDES: $[[ inputs.overrides-json ]]
+    COMPONENT_PROVENANCE: $[[ inputs.provenance ]]
+    UV_CACHE_DIR: $CI_PROJECT_DIR/.cache/uv
+    UV_PYTHON_DOWNLOADS: never
+  before_script:
+  - cd "$CI_PROJECT_DIR/$COMPONENT_DIRECTORY"
+  - $[[ inputs.setup ]]
+  rules: $[[ inputs.rules ]]
+  stage: test
+  dependencies: []
+  script:
+  - "python - <<'COMPONENT_PYTHON'\n\"\"\"Resolve candidate dependencies to immutable Git commits, sync,\
+    \ restore manifests.\"\"\"\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport subprocess\n\
+    from urllib.parse import urlsplit\nimport tomlkit\n\n\ndef resolve_override(item):\n    name, repo,\
+    \ ref = (item.get(k, '') for k in ('package', 'repo', 'ref'))\n    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*',\
+    \ name):\n        raise ValueError('Invalid distribution package name')\n    url = urlsplit(repo)\n\
+    \    if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or\
+    \ url.fragment:\n        raise ValueError('Use a credential-free HTTPS Git repository URL')\n    if\
+    \ not ref or ref.startswith('-') or re.search(r'[\\s~^:?*\\[\\\\]', ref):\n        raise ValueError('Invalid\
+    \ Git ref')\n    sub = item.get('subdirectory', '')\n    if sub and (not re.fullmatch(r'[A-Za-z0-9_./-]+',\
+    \ sub) or '..' in sub.split('/') or sub.startswith('/')):\n        raise ValueError('Invalid package\
+    \ subdirectory')\n    if re.fullmatch(r'[a-fA-F0-9]{40}', ref):\n        sha = ref.lower()\n    else:\n\
+    \        wanted = [ref] if ref.startswith('refs/') else ['refs/heads/'+ref, 'refs/tags/'+ref]\n  \
+    \      result = subprocess.run(['git', 'ls-remote', '--exit-code', repo, *wanted, *[x+'^{}' for x\
+    \ in wanted]], capture_output=True, text=True)\n        if result.returncode:\n            raise ValueError('Cannot\
+    \ resolve dependency ref; check ref, credentials and job-token allowlist')\n        refs = dict(line.split()[::-1]\
+    \ for line in result.stdout.splitlines())\n        matches = [r for r in wanted if r in refs]\n  \
+    \      if len(matches) != 1:\n            raise ValueError('Ambiguous ref; use refs/heads/... or refs/tags/...')\n\
+    \        sha = refs.get(matches[0]+'^{}', refs[matches[0]])\n    requirement = f'{name} @ git+{repo}@{sha}'\
+    \ + (f'#subdirectory={sub}' if sub else '')\n    return requirement, {'package': name, 'repo': repo,\
+    \ 'requested_ref': ref, 'commit': sha, 'subdirectory': sub}\n\n\ndef main():\n    overrides = json.loads((os.environ.get('COMPONENT_DEPENDENCY_OVERRIDES')\
+    \ or '[]'))\n    if not isinstance(overrides, list):\n        raise ValueError('CI_DEPENDENCY_OVERRIDES\
+    \ must be a JSON array')\n    single = [os.environ.get('COMPONENT_DEPENDENCY_'+k, '') for k in ('REPO',\
+    \ 'REF', 'PACKAGE')]\n    if any(single):\n        if not all(single):\n            raise ValueError('Provide\
+    \ repository, ref and package together')\n        overrides.append(dict(zip(('repo','ref','package'),\
+    \ single)))\n    project = Path('pyproject.toml')\n    lock = Path('uv.lock')\n    if not lock.is_file():\n\
+    \        raise ValueError('Commit uv.lock; normal validation uses uv sync --locked')\n    if not overrides:\n\
+    \        subprocess.run(['uv','sync','--locked','--all-groups'], check=True)\n        return\n   \
+    \ original = project.read_bytes()\n    original_lock = lock.read_bytes()\n    provenance = []\n  \
+    \  requirements = []\n    names = set()\n    for item in overrides:\n        req, record = resolve_override(item)\n\
+    \        normalized = re.sub(r'[-_.]+','-',record['package']).lower()\n        if normalized in names:\n\
+    \            raise ValueError('Duplicate package override')\n        names.add(normalized)\n     \
+    \   requirements.append(req)\n        provenance.append(record)\n    data = tomlkit.parse(original.decode())\n\
+    \    uv = data.setdefault('tool', {}).setdefault('uv', {})\n    existing = uv.get('override-dependencies',\
+    \ [])\n    # Avoid conflicting existing overrides for the same distribution.\n    from packaging.requirements\
+    \ import Requirement\n    existing = [x for x in existing if re.sub(r'[-_.]+','-',Requirement(x).name).lower()\
+    \ not in names]\n    uv['override-dependencies'] = existing + requirements\n    sources = uv.get('sources',\
+    \ {})\n    for key in list(sources):\n        if re.sub(r'[-_.]+','-',key).lower() in names:\n   \
+    \         del sources[key]\n    try:\n        project.write_text(tomlkit.dumps(data))\n        subprocess.run(['uv','sync','--all-groups'],\
+    \ check=True)\n        # Verify actual installed source and commit, including transitive overrides.\n\
+    \        code = \"import importlib.metadata as m,json,sys; print(json.dumps({n:json.loads(m.distribution(n).read_text('direct_url.json')\
+    \ or '{}') for n in sys.argv[1:]}))\"\n        installed = json.loads(subprocess.check_output(['.venv/bin/python','-c',code,*[r['package']\
+    \ for r in provenance]],text=True))\n        for record in provenance:\n            if installed[record['package']].get('vcs_info',{}).get('commit_id')\
+    \ != record['commit']:\n                raise ValueError('Installed dependency does not match requested\
+    \ commit')\n        out = Path(os.environ['CI_PROJECT_DIR']) / os.environ['COMPONENT_PROVENANCE']\n\
+    \        out.parent.mkdir(parents=True,exist_ok=True)\n        out.write_text(json.dumps(provenance,indent=2)+'\\\
+    n')\n    finally:\n        project.write_bytes(original)\n        lock.write_bytes(original_lock)\n\
+    \nif __name__ == '__main__':\n    main()\n\nCOMPONENT_PYTHON"
+  - $[[ inputs.commands ]]
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+    - $[[ inputs.provenance ]]
+    reports:
+      junit: $[[ inputs.junit ]]
+  cache:
+    key:
+      prefix: $[[ inputs.name ]]-$CI_COMMIT_REF_SLUG
+      files:
+      - uv.lock
+    paths:
+    - .cache/uv/
+    policy: pull-push
