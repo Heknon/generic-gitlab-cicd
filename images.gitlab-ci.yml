@@ -35,6 +35,9 @@ runtime-wheelhouse:
   - test -n "$PIP_INDEX_URL"
   - 'python -m pip download --only-binary=:all: --require-hashes -r images/python/requirements.lock
     --dest images/python/wheelhouse/'
+  - python -m pip install --no-index --find-links=images/python/wheelhouse --require-hashes -r images/python/requirements.lock
+  - python -m build --no-isolation --wheel --outdir images/python/wheelhouse
+  - python scripts/hash_toolkit_wheel.py
   artifacts:
     paths:
     - images/python/wheelhouse/

@@ -1,4 +1,4 @@
-# BASE_IMAGE must already contain Python 3.12+, Git and update-ca-certificates.
+# BASE_IMAGE must already contain Python 3.11+, Git and update-ca-certificates.
 # Use an approved internally mirrored base digest. No public syntax frontend.
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
@@ -18,9 +18,11 @@ COPY config/uv.toml /etc/uv/uv.toml
 COPY requirements.lock /tmp/requirements.lock
 COPY wheelhouse/ /tmp/wheelhouse/
 RUN python -m pip install --no-index --find-links=/tmp/wheelhouse --require-hashes -r /tmp/requirements.lock \
+    && python -m pip install --no-index --find-links=/tmp/wheelhouse --no-deps --require-hashes -r /tmp/wheelhouse/toolkit-requirements.txt \
     && python -m pip check \
     && uv --version \
     && git --version \
     && python -m twine --version \
     && python -c "import tomlkit, packaging, build, yaml" \
+    && python -m generic_ci schema > /dev/null \
     && rm -rf /tmp/wheelhouse /tmp/requirements.lock
