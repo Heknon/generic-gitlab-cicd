@@ -23,8 +23,8 @@ The standalone path detects Python/package.json and local pnpm/Bun locks. You co
 ```sh
 generic-ci setup --yes --mode standalone --app api --path . \
   --ecosystem python --test-command 'uv run --no-sync pytest' \
-  --runtime-image registry.internal/ci/python-toolkit:0.3.2 \
-  --builder-image registry.internal/ci/buildah-toolkit:0.3.2 \
+  --runtime-image registry.internal/ci/python-toolkit:0.3.3 \
+  --builder-image registry.internal/ci/buildah-toolkit:0.3.3 \
   --registry registry.internal/apps \
   --preview-registry registry.internal/previews --runner-tag internal-linux \
   --dry-run
@@ -35,7 +35,7 @@ Remove `--dry-run` to write. `--yes` means no prompts: missing required answers 
 For an optional deployment, add:
 
 ```sh
---deploy yes --helm-image registry.internal/ci/helm-toolkit:0.3.2 \
+--deploy yes --helm-image registry.internal/ci/helm-toolkit:0.3.3 \
 --chart-oci oci://registry.internal/charts/generic-app --chart-version 2.1.0 \
 --namespace previews --hostname auto --port 8080 --tls edge
 ```

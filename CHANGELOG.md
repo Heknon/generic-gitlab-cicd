@@ -1,3 +1,9 @@
+# 0.3.3
+
+- Add interactive and unattended setup for organization templates and standalone services.
+- Generate local editor schemas, optional OpenShift preview values, and setup notes without overwriting existing files.
+- Rewrite onboarding documentation around setup and explain editor schema mappings.
+
 # 0.3.2
 
 - Reject generated job-name collisions and empty check matrices; omit empty runner tags.

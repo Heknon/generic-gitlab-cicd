@@ -58,7 +58,7 @@ python -m pip install .
 generic-ci --help
 ```
 
-For repeatable organization setup, distribute a versioned wheel through your approved internal package index or wheelhouse. Keep the authoring CLI and the toolkit installed in runner images on the **same version**. This source revision is **0.3.2**; source availability does not imply that version has been published to PyPI.
+For repeatable organization setup, distribute a versioned wheel through your approved internal package index or wheelhouse. Keep the authoring CLI and the toolkit installed in runner images on the **same version**. This source revision is **0.3.3**; source availability does not imply that version has been published to PyPI.
 
 The install command uses your configured package sources. In an air-gapped environment, prepare the wheel and all dependencies internally first.
 
@@ -71,10 +71,10 @@ version: 1
 defaults:
   tags: [internal-linux]
 images:
-  python: registry.example.internal/ci/python-toolkit:0.3.2
+  python: registry.example.internal/ci/python-toolkit:0.3.3
 container-builder:
   engine: buildah
-  image: registry.example.internal/ci/buildah-toolkit:0.3.2
+  image: registry.example.internal/ci/buildah-toolkit:0.3.3
 registries:
   containers: registry.example.internal/apps
   previews: registry.example.internal/previews
