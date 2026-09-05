@@ -1,6 +1,6 @@
 # AI-assisted authoring — revision three
 
-This is the entry point for agents creating or changing pipelines with generic-ci 0.3.1. It describes implemented interfaces. The older product proposals and scenario audits are design history; do not infer support from those documents.
+This is the entry point for agents creating or changing pipelines with generic-ci 0.3.2. It describes implemented interfaces. The older product proposals and scenario audits are design history; do not infer support from those documents.
 
 ## Install and invoke the skill
 
@@ -23,7 +23,7 @@ generic-ci schema -o /tmp/generic-ci-workflows.schema.json
 generic-ci schema --platform-schema -o /tmp/generic-ci-platform.schema.json
 ```
 
-Those schemas describe delivery/platform configuration. Source manifest/project schemas are bundled separately. Schema format version 1 is not toolkit version 0.3.1 or an organization source tag such as v1.4.0.
+Those schemas describe delivery/platform configuration. Source manifest/project schemas are bundled separately. Schema format version 1 is not toolkit version 0.3.2 or an organization source tag such as v1.4.0.
 
 If the CLI is missing, use the organization's documented internal package index or prepared runtime image. Do not silently download from public registries in an air-gapped workflow. Source templates do not install the CLI or runner images.
 

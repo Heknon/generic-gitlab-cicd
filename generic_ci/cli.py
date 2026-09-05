@@ -13,6 +13,13 @@ from .models import Pipeline, Platform
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == 'setup':
+        from .setup import setup_main
+        try:
+            return setup_main(argv[1:])
+        except (ValueError, OSError, EOFError, ValidationError) as error:
+            print(f'generic-ci setup: {error}', file=sys.stderr)
+            return 1
     if argv and argv[0] == 'source':
         from .sources import source_main
         try:
@@ -21,7 +28,7 @@ def main(argv=None):
             print(f'generic-ci: {error}', file=sys.stderr)
             return 1
     parser = argparse.ArgumentParser(prog="generic-ci")
-    parser.add_argument("command", choices=["schema", "validate", "explain", "render", "init"])
+    parser.add_argument("command", choices=["schema", "validate", "explain", "render", "init", "setup"])
     parser.add_argument("--config")
     parser.add_argument("--format", choices=["workflows", "legacy"], default="workflows")
     parser.add_argument("--ecosystem", choices=["python", "npm", "pnpm", "bun"], default="python")
