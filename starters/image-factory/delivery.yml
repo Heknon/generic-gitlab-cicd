@@ -1,0 +1,34 @@
+version: 1
+projects:
+  python:
+    path: images/python
+    checks:
+      configuration:
+        dependencies: false
+        script:
+        - test -s pip.conf
+        - test -s uv.toml
+    container:
+      dockerfile: Dockerfile
+      context: .
+    release:
+      version:
+        file: version.json
+        field: version
+      tag: python/v{version}
+      create:
+        branch: main
+    workflows:
+      push:
+        checks:
+        - configuration
+      merge-request:
+        checks:
+        - configuration
+        build:
+        - container
+      release:
+        checks:
+        - configuration
+        build:
+        - container

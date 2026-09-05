@@ -1,0 +1,30 @@
+version: 1
+projects:
+  api:
+    path: .
+    node:
+      package-manager: pnpm
+    checks:
+      unit:
+        script:
+        - pnpm run test
+    container:
+      dockerfile: Dockerfile
+      context: .
+    release:
+      tag: api/v{version}
+      create: {}
+    workflows:
+      push:
+        checks:
+        - unit
+      merge-request:
+        checks:
+        - unit
+        build:
+        - container
+      release:
+        checks:
+        - unit
+        build:
+        - container

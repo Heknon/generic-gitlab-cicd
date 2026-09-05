@@ -1,0 +1,30 @@
+version: 1
+projects:
+  client:
+    path: .
+    python:
+      groups: all
+    checks:
+      unit:
+        script:
+        - uv run --no-sync pytest
+    package:
+      index: internal
+    release:
+      tag: client/v{version}
+      create: {}
+    workflows:
+      push:
+        checks:
+        - unit
+      merge-request:
+        checks:
+        - unit
+        build:
+        - package
+      release:
+        checks:
+        - unit
+        build:
+        - package
+        publish: true

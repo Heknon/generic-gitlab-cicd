@@ -19,3 +19,10 @@
 - Test the affected workflow class first. Run `tests/integration_uv.py` after Python preparation changes and the offline Node install fixture after Node preparation changes. Never run the image factory for documentation-only changes.
 - Keep schema files generated from their corresponding models. User-selected checks and event workflows must not introduce hidden test suites or require native GitLab rules.
 - Do not claim live GitLab, Buildah/OpenShift, Helm rollout, registry publication, Bun or pnpm validation based solely on mocked commands or YAML parsing.
+
+## Configuration sources
+
+- Source repositories supply data and starter files only; never execute source plugins/hooks.
+- Rendering must use the committed source lock, never a moving branch or the user’s global default.
+- Preserve template ownership: source updates change inherited defaults and locks, never consumer files.
+- Test source changes with `python -m unittest discover -s tests -p test_sources.py`; include real Git/bundle tests for cache and pinning behavior.
