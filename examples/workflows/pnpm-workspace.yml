@@ -1,0 +1,39 @@
+version: 1
+projects:
+  sdk:
+    path: packages/sdk
+    node:
+      package-manager: pnpm
+      workspace: .
+    build:
+      script:
+      - pnpm run build
+      outputs:
+      - dist
+    workflows:
+      push:
+        build:
+        - application
+      merge-request:
+        build:
+        - application
+  api:
+    path: apps/api
+    node:
+      package-manager: pnpm
+      workspace: .
+    depends-on:
+    - sdk
+    checks:
+      contracts:
+        script:
+        - pnpm run test:contracts
+        needs:
+        - sdk.build
+    workflows:
+      push:
+        checks:
+        - contracts
+      merge-request:
+        checks:
+        - contracts

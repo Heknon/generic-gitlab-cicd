@@ -1,3 +1,5 @@
+> Feature-branch workflow interface (0.3.0): see [implemented revision-one guide](docs/workflows-revision-one.md), [configuration examples](examples/workflows), and [JSON Schema](schemas/workflows.schema.json). This is a review build with documented integration gates. Older prototype CLI commands now require `--format legacy`; existing GitLab components remain available.
+
 # Generic GitLab CI components — revision one
 
 A self-contained component repository for GitLab, including an offline-capable runtime-image factory and a generic Kubernetes Helm chart. The recommended Python entry point is `examples/uv-airgap.yml`.
