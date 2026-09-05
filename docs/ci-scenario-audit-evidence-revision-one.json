@@ -1,0 +1,64 @@
+{
+  "templates": 13,
+  "input_declarations": 163,
+  "examples": {
+    "monorepo.yml": {
+      "lines": 118,
+      "includes": 9
+    },
+    "uv-airgap.yml": {
+      "lines": 47,
+      "includes": 7
+    },
+    "web-with-previews.yml": {
+      "lines": 64,
+      "includes": 6
+    },
+    "python.yml": {
+      "lines": 32,
+      "includes": 5
+    },
+    "helm-production.yml": {
+      "lines": 20,
+      "includes": 4
+    },
+    "helm-preview.yml": {
+      "lines": 21,
+      "includes": 3
+    }
+  },
+  "component_only_override_guard_exit": 0,
+  "workspace_root_lock_exit": 0,
+  "workspace_member_helper": "Commit uv.lock; normal validation uses uv sync --locked",
+  "helm_lint": {
+    "exit": 0,
+    "output": "==> Linting charts/generic-app\n[INFO] Chart.yaml: icon is recommended\n\n1 chart(s) linted, 0 chart(s) failed"
+  },
+  "helm_render": {
+    "exit": 0,
+    "resources": [
+      "ConfigMap",
+      "ConfigMap",
+      "Service",
+      "Deployment",
+      "Deployment",
+      "Ingress"
+    ]
+  },
+  "invalid_digest_rejected": true,
+  "audited_commit": "63388e5ff294a92953be256f7b6760c779fd88b5",
+  "audit_date": "2026-09-05",
+  "scenario_count": 48,
+  "coverage_counts": {
+    "Partial": 28,
+    "Local": 6,
+    "Gap": 14
+  },
+  "unit_tests": {
+    "passed": 15,
+    "failed": 0
+  },
+  "real_uv_integration": "passed on Python 3.12.13 using local Git URL rewrite",
+  "embedded_sync": "passed",
+  "live_gitlab_registry_cluster_execution": false
+}
