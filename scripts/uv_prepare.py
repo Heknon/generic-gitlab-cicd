@@ -6,6 +6,7 @@ import re
 import subprocess
 from urllib.parse import urlsplit
 import tomlkit
+import tomllib
 
 
 def resolve_override(item):
@@ -36,7 +37,7 @@ def resolve_override(item):
     return requirement, {'package': name, 'repo': repo, 'requested_ref': ref, 'commit': sha, 'subdirectory': sub}
 
 
-def main():
+def prepare_here(member=None):
     overrides = json.loads((os.environ.get('CI_DEPENDENCY_OVERRIDES') or '[]'))
     if not isinstance(overrides, list):
         raise ValueError('CI_DEPENDENCY_OVERRIDES must be a JSON array')
@@ -50,7 +51,7 @@ def main():
     if not lock.is_file():
         raise ValueError('Commit uv.lock; normal validation uses uv sync --locked')
     if not overrides:
-        subprocess.run(['uv','sync','--locked','--all-groups'], check=True)
+        subprocess.run(['uv','sync','--locked','--all-groups'] + (['--package', member] if member else []), check=True)
         return
     original = project.read_bytes()
     original_lock = lock.read_bytes()
@@ -78,10 +79,11 @@ def main():
             del sources[key]
     try:
         project.write_text(tomlkit.dumps(data))
-        subprocess.run(['uv','sync','--all-groups'], check=True)
+        subprocess.run(['uv','sync','--all-groups'] + (['--package', member] if member else []), check=True)
         # Verify actual installed source and commit, including transitive overrides.
         code = "import importlib.metadata as m,json,sys; print(json.dumps({n:json.loads(m.distribution(n).read_text('direct_url.json') or '{}') for n in sys.argv[1:]}))"
-        installed = json.loads(subprocess.check_output(['.venv/bin/python','-c',code,*[r['package'] for r in provenance]],text=True))
+        interpreter = '.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python'
+        installed = json.loads(subprocess.check_output([interpreter,'-c',code,*[r['package'] for r in provenance]],text=True))
         for record in provenance:
             if installed[record['package']].get('vcs_info',{}).get('commit_id') != record['commit']:
                 raise ValueError('Installed dependency does not match requested commit')
@@ -91,6 +93,32 @@ def main():
     finally:
         project.write_bytes(original)
         lock.write_bytes(original_lock)
+
+
+def main():
+    original_directory = Path.cwd().resolve()
+    repository = Path(os.environ.get('CI_PROJECT_DIR', original_directory)).resolve()
+    owner, member = original_directory, None
+    for parent in (original_directory, *original_directory.parents):
+        if not parent.is_relative_to(repository):
+            break
+        manifest = parent / 'pyproject.toml'
+        if not manifest.is_file():
+            continue
+        data = tomllib.loads(manifest.read_text())
+        settings = data.get('tool', {}).get('uv', {}).get('workspace')
+        if settings:
+            members = {p.resolve() for pattern in settings.get('members', []) for p in parent.glob(pattern)}
+            excluded = {p.resolve() for pattern in settings.get('exclude', []) for p in parent.glob(pattern)}
+            if original_directory in members - excluded:
+                owner = parent
+                member = tomllib.loads((original_directory / 'pyproject.toml').read_text())['project']['name']
+                break
+    try:
+        os.chdir(owner)
+        prepare_here(member)
+    finally:
+        os.chdir(original_directory)
 
 if __name__ == '__main__':
     main()

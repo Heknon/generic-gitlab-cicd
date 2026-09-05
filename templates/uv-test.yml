@@ -89,8 +89,8 @@ $[[ inputs.name ]]:
   script:
   - "python - <<'COMPONENT_PYTHON'\n\"\"\"Resolve candidate dependencies to immutable Git commits, sync,\
     \ restore manifests.\"\"\"\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport subprocess\n\
-    from urllib.parse import urlsplit\nimport tomlkit\n\n\ndef resolve_override(item):\n    name, repo,\
-    \ ref = (item.get(k, '') for k in ('package', 'repo', 'ref'))\n    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*',\
+    from urllib.parse import urlsplit\nimport tomlkit\nimport tomllib\n\n\ndef resolve_override(item):\n\
+    \    name, repo, ref = (item.get(k, '') for k in ('package', 'repo', 'ref'))\n    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*',\
     \ name):\n        raise ValueError('Invalid distribution package name')\n    url = urlsplit(repo)\n\
     \    if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or\
     \ url.fragment:\n        raise ValueError('Use a credential-free HTTPS Git repository URL')\n    if\
@@ -106,34 +106,49 @@ $[[ inputs.name ]]:
     \      if len(matches) != 1:\n            raise ValueError('Ambiguous ref; use refs/heads/... or refs/tags/...')\n\
     \        sha = refs.get(matches[0]+'^{}', refs[matches[0]])\n    requirement = f'{name} @ git+{repo}@{sha}'\
     \ + (f'#subdirectory={sub}' if sub else '')\n    return requirement, {'package': name, 'repo': repo,\
-    \ 'requested_ref': ref, 'commit': sha, 'subdirectory': sub}\n\n\ndef main():\n    overrides = json.loads((os.environ.get('COMPONENT_DEPENDENCY_OVERRIDES')\
-    \ or '[]'))\n    if not isinstance(overrides, list):\n        raise ValueError('CI_DEPENDENCY_OVERRIDES\
-    \ must be a JSON array')\n    single = [os.environ.get('COMPONENT_DEPENDENCY_'+k, '') for k in ('REPO',\
-    \ 'REF', 'PACKAGE')]\n    if any(single):\n        if not all(single):\n            raise ValueError('Provide\
-    \ repository, ref and package together')\n        overrides.append(dict(zip(('repo','ref','package'),\
-    \ single)))\n    project = Path('pyproject.toml')\n    lock = Path('uv.lock')\n    if not lock.is_file():\n\
-    \        raise ValueError('Commit uv.lock; normal validation uses uv sync --locked')\n    if not overrides:\n\
-    \        subprocess.run(['uv','sync','--locked','--all-groups'], check=True)\n        return\n   \
-    \ original = project.read_bytes()\n    original_lock = lock.read_bytes()\n    provenance = []\n  \
-    \  requirements = []\n    names = set()\n    for item in overrides:\n        req, record = resolve_override(item)\n\
-    \        normalized = re.sub(r'[-_.]+','-',record['package']).lower()\n        if normalized in names:\n\
-    \            raise ValueError('Duplicate package override')\n        names.add(normalized)\n     \
-    \   requirements.append(req)\n        provenance.append(record)\n    data = tomlkit.parse(original.decode())\n\
-    \    uv = data.setdefault('tool', {}).setdefault('uv', {})\n    existing = uv.get('override-dependencies',\
-    \ [])\n    # Avoid conflicting existing overrides for the same distribution.\n    from packaging.requirements\
-    \ import Requirement\n    existing = [x for x in existing if re.sub(r'[-_.]+','-',Requirement(x).name).lower()\
-    \ not in names]\n    uv['override-dependencies'] = existing + requirements\n    sources = uv.get('sources',\
-    \ {})\n    for key in list(sources):\n        if re.sub(r'[-_.]+','-',key).lower() in names:\n   \
-    \         del sources[key]\n    try:\n        project.write_text(tomlkit.dumps(data))\n        subprocess.run(['uv','sync','--all-groups'],\
-    \ check=True)\n        # Verify actual installed source and commit, including transitive overrides.\n\
-    \        code = \"import importlib.metadata as m,json,sys; print(json.dumps({n:json.loads(m.distribution(n).read_text('direct_url.json')\
-    \ or '{}') for n in sys.argv[1:]}))\"\n        installed = json.loads(subprocess.check_output(['.venv/bin/python','-c',code,*[r['package']\
-    \ for r in provenance]],text=True))\n        for record in provenance:\n            if installed[record['package']].get('vcs_info',{}).get('commit_id')\
+    \ 'requested_ref': ref, 'commit': sha, 'subdirectory': sub}\n\n\ndef prepare_here(member=None):\n\
+    \    overrides = json.loads((os.environ.get('COMPONENT_DEPENDENCY_OVERRIDES') or '[]'))\n    if not\
+    \ isinstance(overrides, list):\n        raise ValueError('CI_DEPENDENCY_OVERRIDES must be a JSON array')\n\
+    \    single = [os.environ.get('COMPONENT_DEPENDENCY_'+k, '') for k in ('REPO', 'REF', 'PACKAGE')]\n\
+    \    if any(single):\n        if not all(single):\n            raise ValueError('Provide repository,\
+    \ ref and package together')\n        overrides.append(dict(zip(('repo','ref','package'), single)))\n\
+    \    project = Path('pyproject.toml')\n    lock = Path('uv.lock')\n    if not lock.is_file():\n  \
+    \      raise ValueError('Commit uv.lock; normal validation uses uv sync --locked')\n    if not overrides:\n\
+    \        subprocess.run(['uv','sync','--locked','--all-groups'] + (['--package', member] if member\
+    \ else []), check=True)\n        return\n    original = project.read_bytes()\n    original_lock =\
+    \ lock.read_bytes()\n    provenance = []\n    requirements = []\n    names = set()\n    for item in\
+    \ overrides:\n        req, record = resolve_override(item)\n        normalized = re.sub(r'[-_.]+','-',record['package']).lower()\n\
+    \        if normalized in names:\n            raise ValueError('Duplicate package override')\n   \
+    \     names.add(normalized)\n        requirements.append(req)\n        provenance.append(record)\n\
+    \    data = tomlkit.parse(original.decode())\n    uv = data.setdefault('tool', {}).setdefault('uv',\
+    \ {})\n    existing = uv.get('override-dependencies', [])\n    # Avoid conflicting existing overrides\
+    \ for the same distribution.\n    from packaging.requirements import Requirement\n    existing = [x\
+    \ for x in existing if re.sub(r'[-_.]+','-',Requirement(x).name).lower() not in names]\n    uv['override-dependencies']\
+    \ = existing + requirements\n    sources = uv.get('sources', {})\n    for key in list(sources):\n\
+    \        if re.sub(r'[-_.]+','-',key).lower() in names:\n            del sources[key]\n    try:\n\
+    \        project.write_text(tomlkit.dumps(data))\n        subprocess.run(['uv','sync','--all-groups']\
+    \ + (['--package', member] if member else []), check=True)\n        # Verify actual installed source\
+    \ and commit, including transitive overrides.\n        code = \"import importlib.metadata as m,json,sys;\
+    \ print(json.dumps({n:json.loads(m.distribution(n).read_text('direct_url.json') or '{}') for n in\
+    \ sys.argv[1:]}))\"\n        interpreter = '.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python'\n\
+    \        installed = json.loads(subprocess.check_output([interpreter,'-c',code,*[r['package'] for\
+    \ r in provenance]],text=True))\n        for record in provenance:\n            if installed[record['package']].get('vcs_info',{}).get('commit_id')\
     \ != record['commit']:\n                raise ValueError('Installed dependency does not match requested\
     \ commit')\n        out = Path(os.environ['CI_PROJECT_DIR']) / os.environ['COMPONENT_PROVENANCE']\n\
     \        out.parent.mkdir(parents=True,exist_ok=True)\n        out.write_text(json.dumps(provenance,indent=2)+'\\\
     n')\n    finally:\n        project.write_bytes(original)\n        lock.write_bytes(original_lock)\n\
-    \nif __name__ == '__main__':\n    main()\n\nCOMPONENT_PYTHON"
+    \n\ndef main():\n    original_directory = Path.cwd().resolve()\n    repository = Path(os.environ.get('CI_PROJECT_DIR',\
+    \ original_directory)).resolve()\n    owner, member = original_directory, None\n    for parent in\
+    \ (original_directory, *original_directory.parents):\n        if not parent.is_relative_to(repository):\n\
+    \            break\n        manifest = parent / 'pyproject.toml'\n        if not manifest.is_file():\n\
+    \            continue\n        data = tomllib.loads(manifest.read_text())\n        settings = data.get('tool',\
+    \ {}).get('uv', {}).get('workspace')\n        if settings:\n            members = {p.resolve() for\
+    \ pattern in settings.get('members', []) for p in parent.glob(pattern)}\n            excluded = {p.resolve()\
+    \ for pattern in settings.get('exclude', []) for p in parent.glob(pattern)}\n            if original_directory\
+    \ in members - excluded:\n                owner = parent\n                member = tomllib.loads((original_directory\
+    \ / 'pyproject.toml').read_text())['project']['name']\n                break\n    try:\n        os.chdir(owner)\n\
+    \        prepare_here(member)\n    finally:\n        os.chdir(original_directory)\n\nif __name__ ==\
+    \ '__main__':\n    main()\n\nCOMPONENT_PYTHON"
   - $[[ inputs.commands ]]
   artifacts:
     when: always

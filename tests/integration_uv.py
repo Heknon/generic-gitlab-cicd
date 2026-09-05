@@ -1,6 +1,7 @@
 import os,tempfile,subprocess,sys,json
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from uv_prepare import main
 with tempfile.TemporaryDirectory() as d:
  r=Path(d);sdk=r/'sdk';sdk.mkdir();app=r/'app';app.mkdir()
@@ -30,3 +31,20 @@ def build_wheel(wheel_directory,config_settings=None,metadata_directory=None):
  provenance=json.loads((app/'reports/provenance.json').read_text());assert provenance[0]['commit']==sha
  subprocess.run(['.venv/bin/python','-c','import demo_sdk; assert demo_sdk.VALUE == 42'],check=True)
  print('REAL UV OVERRIDE INTEGRATION PASSED: unresolved >=2 requirement replaced by branch package 1.0.0 at verified SHA')
+ from generic_ci.dependencies import prepared
+ from generic_ci.models import Dependencies
+ original_lock=(app/'uv.lock').read_bytes()
+ candidate={'repository':'https://git.example/test/sdk.git','requested_ref':'feature','commit':sha,'package':'demo-sdk','subdirectory':'','projects':['app']}
+ from unittest.mock import patch
+ clean_indexes={key:'' for key in ('PIP_INDEX_URL','PIP_EXTRA_INDEX_URL','UV_INDEX_URL','UV_DEFAULT_INDEX','UV_EXTRA_INDEX_URL')}
+ with patch.dict(os.environ,clean_indexes):
+  try:
+   with prepared(app,app,Dependencies(groups=[]).model_dump(),[candidate],'app',['git.example'],app/'evidence') as evidence:
+    assert evidence['candidates'][0]['commit']==sha
+    subprocess.run([evidence['interpreter'],'-c','import demo_sdk; assert demo_sdk.VALUE == 42'],check=True)
+    raise RuntimeError('simulated user command failure')
+  except RuntimeError as error:
+   assert str(error)=='simulated user command failure'
+ assert (app/'pyproject.toml').read_text()==text
+ assert (app/'uv.lock').read_bytes()==original_lock
+ print('PRODUCT UV INTEGRATION PASSED: exact candidate identity and restoration after user command failure')
