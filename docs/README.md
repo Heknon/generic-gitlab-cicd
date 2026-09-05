@@ -1,6 +1,6 @@
 # Documentation map
 
-For the current 0.3.0 feature-branch interface, read the implementation guides below. The CLI compiles developer-owned workflows into GitLab CI. Existing components remain available separately.
+For the current 0.3.1 feature-branch interface, read the implementation guides below. The CLI compiles developer-owned workflows into GitLab CI. Existing components remain available separately.
 
 | Need | Start here |
 |---|---|

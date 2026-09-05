@@ -213,12 +213,12 @@ def build_image(data, node, root, out, plan):
             subprocess.run(['buildah', 'rmi', (out / 'iid').read_text().strip()], capture_output=True)
 
 
-def package_build(project, root, out):
-    directory = path_in(path_in(root, project['path']), project['package']['directory'])
+def package_build(project, root, out, directory=None):
+    directory = directory or path_in(path_in(root, project['path']), project['package']['directory'])
     dist = out / 'dist'
     dist.mkdir(exist_ok=True)
     if project['python'] is not None:
-        subprocess.run(['uv', 'build', '--no-sources', '--out-dir', str(dist)], cwd=directory, check=True)
+        subprocess.run(['uv', 'build', '--project', str(directory), '--no-sources', '--out-dir', str(dist)], cwd=directory, check=True)
         files = list(dist.glob('*.whl')) + list(dist.glob('*.tar.gz'))
         if not list(dist.glob('*.whl')) or not list(dist.glob('*.tar.gz')):
             raise ValueError('package build must produce wheel and sdist')
@@ -260,35 +260,43 @@ def package_build(project, root, out):
 
 
 def publish(data, node, project, root, records, plan):
-    if os.environ.get('CI_COMMIT_REF_PROTECTED') != 'true' or plan['candidates'] or plan['event'] != 'release':
-        raise ValueError('publishing requires a protected release without candidate dependencies')
-    current = validate_version(project, root, plan)
+    from .publication import (check_development_context, destination, release_channel, snapshot_version)
+    development = node['settings'].get('channel') == 'development'
+    if development:
+        check_development_context(plan)
+        current = None
+    else:
+        if os.environ.get('CI_COMMIT_REF_PROTECTED') != 'true' or plan['candidates'] or plan['event'] != 'release':
+            raise ValueError('publishing requires a protected release without candidate dependencies')
+        current = validate_version(project, root, plan)
     directory = path_in(root, project['path'])
     if node['settings']['publish_package']:
         package_dir = path_in(directory, project['package']['directory'])
-        files = [path_in(root, f['artifact']) for r in records if r['action'] == 'package' for f in r['files']]
-        if not files:
-            raise ValueError('missing built package artifacts')
-        if any(r.get('package', {}).get('version') != current for r in records if r['action'] == 'package'):
-            raise ValueError('built package version differs from release version')
+        target = destination(project, package_dir, data['platform']['allowed_hosts'], development)
+        packages = [r for r in records if r['action'] == 'package' and r.get('project') == node['project']]
+        files = [path_in(root, f['artifact']) for r in packages for f in r['files']]
+        if len(packages) != 1 or not files:
+            raise ValueError('missing unique project package artifacts')
+        if development:
+            meta = tomllib.loads((package_dir / 'pyproject.toml').read_text())['project'] if project['python'] is not None else json.loads((package_dir / 'package.json').read_text())
+            current = snapshot_version(meta['version'], project['node'] is not None)
+            if packages[0].get('publication') != {'channel': 'development', 'destination': target}:
+                raise ValueError('development artifact destination differs from publication configuration')
+        if packages[0]['package']['version'] != current:
+            raise ValueError('built package version differs from publication version')
+        channel = 'dev' if development else release_channel(current, project['node'] is not None)
         if project['python'] is not None:
-            index = project['package']['index']
-            rows = tomllib.loads((package_dir / 'pyproject.toml').read_text()).get('tool', {}).get('uv', {}).get('index', [])
-            chosen = [r for r in rows if r.get('name') == index and r.get('publish-url')]
-            if len(chosen) != 1:
-                raise ValueError('select one named uv index with publish-url in pyproject.toml')
-            allowed_url(chosen[0]['publish-url'], data['platform']['allowed_hosts'])
-            subprocess.run(['uv', 'publish', '--index', index, *map(str, files)], cwd=package_dir, check=True)
+            subprocess.run(['uv', 'publish', '--index', target['index'], '--publish-url', target['url'], '--check-url', target['check_url'], *map(str, files)], cwd=package_dir, check=True)
         else:
-            meta = json.loads((package_dir / 'package.json').read_text())
-            registry = meta.get('publishConfig', {}).get('registry')
-            if not registry:
-                raise ValueError('package.json publishConfig.registry is required')
-            allowed_url(registry, data['platform']['allowed_hosts'])
-            if meta.get('private'):
-                raise ValueError('cannot publish private package')
             for file in files:
-                subprocess.run(['npm', 'publish', str(file), '--registry', registry, '--ignore-scripts'], cwd=package_dir, check=True)
+                with tarfile.open(file) as archive:
+                    packed = json.load(archive.extractfile('package/package.json'))
+                config = packed.get('publishConfig', {})
+                if config.get('tag', channel) != channel or config.get('registry', target['url']).rstrip('/') != target['url'].rstrip('/'):
+                    raise ValueError('archive publishConfig conflicts with publication channel or registry')
+                subprocess.run(['npm', 'publish', str(file), '--registry', target['url'], '--tag', channel, '--ignore-scripts'], cwd=package_dir, check=True)
+        if development:
+            return {'version': current, 'publication': {'channel': 'development', 'destination': target}}
     tag = project['release']['tag'].format(version=current)
     existing = api(data, 'GET', '/releases/' + urllib.parse.quote(tag, safe=''), missing=True)
     if not existing:
@@ -353,7 +361,24 @@ def run_job(data, key, root, expected):
         result.update(build_image(data, node, root, out, plan))
     elif action == 'package':
         with environment(project, {}, root, node['project'], plan['candidates'], data['platform']['allowed_hosts'], out):
-            result.update(package_build(project, root, out))
+            if node['settings'].get('channel') == 'development':
+                from .publication import check_development_context, destination, rewrite_snapshot
+                check_development_context(plan)
+                package_dir = path_in(path_in(root, project['path']), project['package']['directory'])
+                target = destination(project, package_dir, data['platform']['allowed_hosts'], True)
+                with tempfile.TemporaryDirectory(prefix='generic-ci-package-') as temp:
+                    # Preserve workspace layout, generated files and prepared dependencies.
+                    # Only the copy's manifest is rewritten, including on build failure.
+                    copied = Path(temp) / 'source'
+                    shutil.copytree(root, copied, symlinks=True, ignore=shutil.ignore_patterns('.git', '.ci-out'))
+                    copied_dir = path_in(path_in(copied, project['path']), project['package']['directory'])
+                    if (copied_dir / ('package.json' if project['node'] is not None else 'pyproject.toml')).is_symlink():
+                        raise ValueError('development package manifest cannot be a symlink')
+                    rewrite_snapshot(copied_dir, project['node'] is not None, target)
+                    result.update(package_build(project, root, out, copied_dir))
+                result['publication'] = {'channel': 'development', 'destination': target}
+            else:
+                result.update(package_build(project, root, out))
     elif action == 'publish':
         result.update(publish(data, node, project, root, records, plan))
     elif action == 'deploy':

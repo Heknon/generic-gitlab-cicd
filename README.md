@@ -2,7 +2,7 @@ Start with the [documentation map](docs/README.md), [AI authoring guide](docs/ai
 
 Organization defaults and Git-backed starter templates are now available: see [configuration sources — revision two](docs/configuration-sources-revision-two.md).
 
-> Feature-branch workflow interface (0.3.0): see [implemented revision-one guide](docs/workflows-revision-one.md), [configuration examples](examples/workflows), and [JSON Schema](schemas/workflows.schema.json). This is a review build with documented integration gates. Older prototype CLI commands now require `--format legacy`; existing GitLab components remain available.
+> Feature-branch workflow interface (0.3.1): see [implemented revision-one guide](docs/workflows-revision-one.md), [configuration examples](examples/workflows), and [JSON Schema](schemas/workflows.schema.json). This is a review build with documented integration gates. Older prototype CLI commands now require `--format legacy`; existing GitLab components remain available.
 
 # Generic GitLab CI components — revision one
 

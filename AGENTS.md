@@ -33,3 +33,10 @@
 - The portable authoring skill lives under skills/generic-ci-authoring. Keep it self-contained for installations outside this repository.
 - Update canonical docs/examples/schemas, then run python scripts/sync_authoring_skill.py. CI checks the bundle with --check.
 - Distinguish implemented workflow/source interfaces from historical design documents and the unimplemented MCP server.
+
+## Package publication
+
+- Development snapshots use an isolated preview destination and temporary manifest copy; never mutate the checked-out version or silently publish snapshots to release indexes.
+- Preserve checks and explicit artifact prerequisites when inferring package builds from publication.
+- Distinct configured URLs cannot prove Artifactory virtual repository isolation. Document server-side membership and preview-only credential requirements.
+- Preserve archive metadata validation, exact-version receipts, same-project MR restrictions and candidate-publication rejection. Never overwrite or delete existing registry versions to fix a retry.

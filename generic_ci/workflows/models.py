@@ -52,8 +52,22 @@ class Container(Model):
     dependency_bundle: bool = Field(default=False, description='Python Dockerfile consumes named ci-dependencies wheelhouse context; required for candidate previews.')
     _paths = field_validator('dockerfile', 'context')(relative)
 
+class PreviewPackage(Model):
+    index: str | None = Field(default=None, description="Python named uv index, marked explicit=true and isolated from normal indexes.")
+    registry: str | None = Field(default=None, description="Node preview registry URL, separate from publishConfig.registry.")
+
+    @model_validator(mode='after')
+    def one_destination(self):
+        if bool(self.index) == bool(self.registry):
+            raise ValueError('preview requires exactly one of index (Python) or registry (Node)')
+        return self
+
+class Publication(Model):
+    channel: Literal["development", "auto"]
+
 class Package(Model):
     directory: str = '.'
+    preview: PreviewPackage | None = None
     index: str | None = Field(default=None, description='Python named uv publishing index; Node reads publishConfig.registry.')
     needs: list[str] = Field(default_factory=list)
     _path = field_validator('directory')(relative)
@@ -83,7 +97,7 @@ class Release(Model):
 class Workflow(Model):
     checks: list[str] = Field(default_factory=list)
     build: bool | list[Literal['application', 'container', 'package']] = False
-    publish: bool = False
+    publish: bool | Publication = False
 
 Event = Literal['push', 'merge-request', 'release', 'manual', 'schedule']
 
@@ -105,6 +119,11 @@ class Project(Model):
     def ecosystem(self):
         if self.python is not None and self.node is not None:
             raise ValueError('use separate project identities for Python and Node outputs sharing a path')
+        if self.package and self.package.preview:
+            if ((self.python is not None and not self.package.preview.index)
+                    or (self.node is not None and not self.package.preview.registry)
+                    or (self.python is None and self.node is None)):
+                raise ValueError('preview destination must match the project ecosystem')
         if self.release and not self.release.version:
             if self.python is not None:
                 self.release.version = VersionSource(file='pyproject.toml', field='project.version')

@@ -3,7 +3,7 @@ name: generic-ci-authoring
 description: Create, edit, validate and render generic-ci pipelines using Git-backed organization templates and defaults. Use for this toolkit's delivery YAML, monorepo dependencies, releases, image factories and Helm deployment configuration.
 ---
 
-Create reviewable authoring files and generated GitLab CI using the installed CLI. Read [the authoring procedure](references/authoring.md) for onboarding, editing, validation and troubleshooting. This package targets the 0.3.0 review interface; inspect the installed CLI/schema before using fields from memory.
+Create reviewable authoring files and generated GitLab CI using the installed CLI. Read [the authoring procedure](references/authoring.md) for onboarding, editing, validation and troubleshooting. This package targets the 0.3.1 review interface; inspect the installed CLI/schema before using fields from memory.
 
 Load additional references only for the task at hand:
 
@@ -12,6 +12,8 @@ Load additional references only for the task at hand:
 - [Configuration sources](references/sources.md): source registration, pinned defaults, overlays, upgrades and offline bundles.
 - `references/examples/`: runnable configuration examples for delivery, Python packages, Bun backends, React builds and a pnpm SDK/API workspace; platform.yml supplies illustrative infrastructure.
 - `references/schemas/`: bundled workflow, platform, source and source-project JSON Schemas for offline inspection. Installed CLI schema takes precedence if versions differ.
+
+For package publication, read the revision-four section of [workflow contracts](references/workflows.md). Development packages require isolated preview destinations and exact-version consumption; prerelease opt-in alone does not isolate branch builds. Publication automatically selects its package build.
 
 Preserve these contracts:
 

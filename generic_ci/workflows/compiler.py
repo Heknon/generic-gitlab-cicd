@@ -112,19 +112,32 @@ def compile_pipeline(pipeline, platform, sources=None):
                     raise ValueError(f'{name}: build: true requires exactly one output; list application/container/package explicitly')
             elif operations is False:
                 operations = []
+            publication = workflow['publish']
+            channel = publication['channel'] if isinstance(publication, dict) else 'auto'
+            if publication:
+                if channel == 'development':
+                    if event == 'release':
+                        raise ValueError(f'{name}: development publication cannot run on release tags')
+                    preview = (project['package'] or {}).get('preview')
+                    if not preview or not (preview.get('index') if project['python'] is not None else preview.get('registry')):
+                        raise ValueError(f'{name}: development publication requires an explicit preview package destination')
+                elif event != 'release':
+                    raise ValueError(f'{name}: auto publication requires a release workflow')
+                if 'package' not in operations:
+                    operations = [*operations, 'package']
             built = []
             for kind in operations:
                 if available[kind] is None:
                     raise ValueError(f'{name}: no {kind} build configured')
                 public = {'application': 'build', 'container': 'build-image', 'package': 'build-package'}[kind]
                 key = add(f'{event}:{name}:{public}', name, event, kind, available[kind], gates)
+                if kind == 'package':
+                    nodes[key]['settings'] = {**nodes[key]['settings'], 'channel': channel if publication else 'auto'}
                 nodes[key]['execution'] = merge(infra['defaults'], project['defaults'])
                 refs[event, name + '.' + public] = [key]
                 built.append(key)
-            if workflow['publish'] and (event != 'release' or 'package' not in operations):
-                raise ValueError(f'{name}: publish requires a release package build')
-            if event == 'release':
-                final = add(f'{event}:{name}:publish', name, event, 'publish', {'publish_package': workflow['publish']}, gates + built)
+            if event == 'release' or publication:
+                final = add(f'{event}:{name}:publish', name, event, 'publish', {'publish_package': bool(publication), 'channel': channel}, gates + built)
                 refs[event, name + '.publish'] = [final]
         release = project['release']
         if release and release['require_bump'] and 'merge-request' not in project['workflows']:
@@ -141,7 +154,7 @@ def compile_pipeline(pipeline, platform, sources=None):
         if node['action'] not in {'check', 'application', 'container', 'package', 'publish'}:
             continue
         requested = node['settings'].get('needs', [])
-        if node['action'] == 'publish':
+        if node['action'] == 'publish' and node['event'] == 'release':
             requested = [dep + '.publish' for dep in projects[node['project']]['release']['needs']]
         for ref in requested:
             ref = ref if '.' in ref else node['project'] + '.' + ref

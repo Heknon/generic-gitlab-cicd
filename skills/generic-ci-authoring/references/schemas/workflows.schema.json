@@ -603,6 +603,17 @@
           "title": "Directory",
           "type": "string"
         },
+        "preview": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreviewPackage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "index": {
           "anyOf": [
             {
@@ -625,6 +636,39 @@
         }
       },
       "title": "Package",
+      "type": "object"
+    },
+    "PreviewPackage": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Python named uv index, marked explicit=true and isolated from normal indexes.",
+          "title": "Index"
+        },
+        "registry": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Node preview registry URL, separate from publishConfig.registry.",
+          "title": "Registry"
+        }
+      },
+      "title": "PreviewPackage",
       "type": "object"
     },
     "Project": {
@@ -747,6 +791,24 @@
         }
       },
       "title": "Project",
+      "type": "object"
+    },
+    "Publication": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "enum": [
+            "development",
+            "auto"
+          ],
+          "title": "Channel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel"
+      ],
+      "title": "Publication",
       "type": "object"
     },
     "Python": {
@@ -899,9 +961,16 @@
           "title": "Build"
         },
         "publish": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/Publication"
+            }
+          ],
           "default": false,
-          "title": "Publish",
-          "type": "boolean"
+          "title": "Publish"
         }
       },
       "title": "Workflow",

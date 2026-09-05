@@ -1,6 +1,6 @@
 # Implemented workflows — revision one
 
-The workflow interface is available in the 0.3.0 feature branch. It replaces hidden test presets with team-defined checks and event selection. It remains a review build: target GitLab, Buildah/OpenShift and registry/cluster integration have not been exercised in this workspace.
+The workflow interface is available in the 0.3.1 feature branch. It replaces hidden test presets with team-defined checks and event selection. It remains a review build: target GitLab, Buildah/OpenShift and registry/cluster integration have not been exercised in this workspace.
 
 ## Start and inspect
 
@@ -27,7 +27,7 @@ See examples/workflows for compilable configuration examples. Their source direc
 - `workflows` supports push, merge-request, release, manual (GitLab web pipeline), and schedule. Checks are explicit lists. Push is suppressed when an MR pipeline takes its place; lists are not implicitly combined.
 - `build.script` and `build.outputs` define application compilation, code generation or static frontend output. `container` defines Buildah input. `package` defines an ecosystem package build.
 - Workflow `build: true` requires exactly one configured output. With multiple outputs use `build: [application, container, package]`, selecting only the operations needed.
-- `publish: true` is available only in a release workflow with package build selected. Node uses npm-compatible packing/publishing even when installation uses Bun or pnpm; npm must be installed in those role images.
+- `publish: true` (or `publish: {channel: auto}`) selects release publication and automatically includes the package build. `publish: {channel: development}` selects isolated snapshot publication on a non-release workflow; see the package publication section below. Node uses npm-compatible packing/publishing even when installation uses Bun or pnpm; npm must be installed in those role images.
 
 React needs no dedicated runtime abstraction: define type checking/testing commands and an application build producing dist (or your framework's actual directory). Static output is exposed as artifacts, not automatically published to a CDN. Server-rendered frontends and Node backends can declare container builds.
 
@@ -69,7 +69,7 @@ CI_DEPENDENCY_REPO, CI_DEPENDENCY_REF and CI_DEPENDENCY_PACKAGE select a single 
 
 Python candidates use resolver overrides, verify installed direct_url identity and restore manifests/lock on failure. Node candidates clone the exact commit, pack existing distributable content without scripts, apply temporary root overrides and consumer dependency entries, regenerate a temporary lock, and verify installed files against the candidate tarball. Node candidates must already contain distributable output and expose an installed package at node_modules; complex peer/override combinations may fail and are not silently bypassed. Existing pnpm-workspace.yaml overrides currently require manual reconciliation. Node candidate adapter needs live pnpm/Bun integration validation.
 
-Candidate release publication is blocked. Python candidate image builds require container.dependency-bundle: true and a Dockerfile consuming the named ci-dependencies context (wheelhouse/requirements.txt); application-specific image tests must verify consumption. Node candidate image builds are explicitly blocked until equivalent bundle parity exists. Ordinary source-only image builds never silently discard candidate overrides.
+All package publication with candidate overrides is blocked. Python candidate image builds require container.dependency-bundle: true and a Dockerfile consuming the named ci-dependencies context (wheelhouse/requirements.txt); application-specific image tests must verify consumption. Node candidate image builds are explicitly blocked until equivalent bundle parity exists. Ordinary source-only image builds never silently discard candidate overrides.
 
 ## Helm
 
@@ -88,3 +88,89 @@ MR stop is manual, matches start eligibility and works without checkout/build ar
 ## Verification boundary
 
 Local tests cover schema/graph contracts, actual artifact handoff and tamper rejection, offline npm installation, Python preparation integration, SemVer ordering and partial image-map behavior. Buildah command assembly is mocked. Live GitLab CI Lint, OpenShift runner behavior, Helm upgrades/rollbacks, registry publication, full cold air-gap runs and native Bun/pnpm install matrices remain required before production adoption. These limitations are not waived by passing local tests.
+
+## Package publication — revision four
+
+A development package is an explicitly selected test artifact. Beta/RC releases are deliberately published versions that ordinary prerelease consumers may discover. Do not publish branch snapshots into the shared release package index.
+
+```yaml
+projects:
+  sdk:
+    path: packages/sdk
+    python: {groups: all}
+    package:
+      index: internal
+      preview: {index: preview}
+    checks:
+      unit:
+        script: ["uv run --no-sync pytest"]
+    release:
+      tag: "sdk-v{version}"
+    workflows:
+      merge-request:
+        checks: [unit]
+        publish: {channel: development}
+      release:
+        checks: [unit]
+        publish: {channel: auto}
+```
+
+Package build is inferred from publication; it waits for the event's selected checks and version validation. No hidden test names are added. Additional generated inputs still use `package.needs`. A development publish job has the same public `sdk.publish` reference in its event; `release.needs` only applies to release workflows. Selecting a deployment still requires its image build to be enabled explicitly.
+
+Define Python URLs in the package's pyproject.toml:
+
+```toml
+[[tool.uv.index]]
+name = "internal"
+url = "https://artifactory.internal/api/pypi/python-release/simple"
+publish-url = "https://artifactory.internal/api/pypi/python-release"
+
+[[tool.uv.index]]
+name = "preview"
+url = "https://artifactory.internal/api/pypi/python-preview/simple"
+publish-url = "https://artifactory.internal/api/pypi/python-preview"
+explicit = true
+```
+
+`explicit = true` prevents the preview index from participating in ordinary resolution unless a package is assigned to it. The toolkit rejects preview endpoints that duplicate another configured index and requires a different index name from the release destination. Keep the default/internal index configuration suitable for your network; `explicit` does not configure or disable other indexes.
+
+For Node, use `node: {package-manager: npm}` (or pnpm/Bun), retain the normal registry in `package.json`'s `publishConfig.registry`, and declare `package.preview.registry: https://artifactory.internal/api/npm/npm-preview`. The preview URL must differ from the release registry. The temporary package's `publishConfig` is rewritten too, so an embedded normal registry or `latest` tag cannot redirect the development upload. Publication still uses npm for pnpm/Bun projects.
+
+| Workflow publication | Version | Destination | GitLab Release |
+| --- | --- | --- | --- |
+| `channel: development` | Python `1.5.0.dev4821`; Node `1.5.0-dev.4821` | Explicit preview destination | Never |
+| `channel: auto` or `true` | Declared version, matching the protected release tag | Normal publishing destination | Yes |
+
+Snapshot numbers use `CI_PIPELINE_ID`, stable across a job retry and unique within one GitLab instance. The release base is taken from the declared version: `1.5.0rc1` also produces `1.5.0.dev4821`. Python local/postrelease versions and dynamic versions are rejected for snapshot generation. Package ownership must be unique across repositories; sharing a preview repository across independent GitLab instances needs separate repository namespaces to prevent ID collisions.
+
+The runtime copies the prepared repository into temporary storage, changes only that copy's static package version, builds and validates archive metadata, then deletes the copy. Original manifests and locks are unchanged, including on failure. Prepared dependencies and generated workspace files are copied too; allow temporary disk space accordingly. Git metadata is excluded: builds requiring Git-derived versions or Git commands in packaging hooks are unsupported in this mode. Internal sibling dependency constraints are not rewritten automatically. Publishing multiple workspace packages together does not make them depend on each other's snapshot versions.
+
+Build receipts contain the exact package version, artifact hashes, pipeline/commit identity and preview destination. Publishing requires the matching receipt. Development publication rejects release tags, fork MRs and candidate dependency overrides. It does not need a GitLab release API token. For branch pipelines, enabling development publication is an explicit decision to trust those branch jobs with preview-scoped credentials.
+
+For normal publication, `auto` reads the declared version; it never changes it. Python alpha/beta/RC versions stay in the shared release index. Node uses explicit `alpha`, `beta`, `rc` or `latest` dist-tags; conflicting archive publishConfig is rejected. Development versions are rejected from normal package publication. Custom Node prerelease labels are not supported in this revision.
+
+### Consuming a specific snapshot
+
+Consumers explicitly choose both the preview repository and exact version. For uv, configure the preview index as above and use:
+
+```toml
+[project]
+dependencies = ["company-sdk==1.5.0.dev4821"]
+
+[tool.uv.sources]
+company-sdk = {index = "preview"}
+```
+
+Update and commit the lockfile for a persistent selection; normal CI installs remain frozen. Keep temporary experiments in a branch, or use the toolkit's existing repo/ref/package overrides when testing source without publishing. No global prerelease opt-in is needed for this exact prerelease requirement with normal uv defaults; an explicit disallow policy must be adjusted.
+
+For npm-compatible consumers, configure a scope-specific preview registry in the test branch's npm configuration and pin the exact snapshot version. A scope mapping affects every package in that scope; if stable siblings need another registry, use a deliberately configured test-only virtual registry or another explicit package source. Do not point normal consumers at that test registry. The preview `dev` dist-tag is mutable across branches and is not an exact-build selector.
+
+### Artifactory and air-gap boundaries
+
+- Provision physically separate release and preview repositories; exclude preview repositories from all normal virtual repository aggregation. Distinct URLs alone cannot prove server-side isolation, and the toolkit does not inspect Artifactory membership or aliases.
+- Give branch/MR jobs credentials with upload access only to the preview repository. Keep release credentials protected and unavailable to those jobs. Use index-specific uv credentials and registry-scoped npm authentication; never commit secrets.
+- Add both hosts to platform `allowed-hosts`, install the appropriate CA trust in role images, and provide internal build dependencies. No public bootstrap is introduced.
+- Configure immutable versions/no overwrites and a preview retention policy. Retain packages needed by active test locks; deleting a pinned snapshot breaks clean installs.
+- A retry reuses the version. uv uses the explicit destination's check URL for duplicate checking. npm existing-version retries fail; reconcile partial publication before retrying. The toolkit never deletes or overwrites packages to make a retry succeed, and does not yet provide cross-registry promotion or an npm remote-checksum reconciliation adapter.
+
+Local compilation, archive tests and mocked upload commands do not prove live registry permissions or isolation. Validate a same-project MR publication and exact-version install against your actual Artifactory/GitLab setup before adoption.
