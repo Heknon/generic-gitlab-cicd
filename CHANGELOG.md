@@ -1,3 +1,8 @@
+# 0.3.4
+
+- Showcase monorepo testing, package publication, container builds and OpenShift deployment in one README example.
+- Simplify onboarding around guided setup and editor schema generation.
+
 # 0.3.3
 
 - Add interactive and unattended setup for organization templates and standalone services.
