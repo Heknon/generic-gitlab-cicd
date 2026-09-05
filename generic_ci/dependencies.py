@@ -48,7 +48,7 @@ def resolve_candidates(environment, hosts, projects):
         if not all(isinstance(v, str) for v in (repo, ref, name)):
             raise ValueError("override repository/ref/package must be strings")
         allowed_url(repo, hosts)
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+        if not re.fullmatch(r"(?:@[A-Za-z0-9._-]+/)?[A-Za-z0-9][A-Za-z0-9._-]*", name):
             raise ValueError("invalid override distribution name")
         if normalize(name) in seen:
             raise ValueError(f"duplicate override package {name}")
@@ -126,14 +126,18 @@ def prepared(directory, repository, policy, candidates, project, hosts, record_d
     validate_indexes(root, hosts)
     original, original_lock = manifest.read_bytes(), lock.read_bytes()
     selected = [r for r in candidates if project in r["projects"]]
-    options = ["--no-default-groups"]
-    if "*" in policy["groups"]:
+    groups = policy.get("groups")
+    options = [] if groups is None else ["--no-default-groups"]
+    if groups == "all" or (groups is not None and "*" in groups):
         options += ["--all-groups"]
     else:
-        for group in policy["groups"]:
+        for group in groups or []:
             options += ["--group", group]
-    for extra in policy["extras"]:
-        options += ["--extra", extra]
+    if policy["extras"] == "all":
+        options += ["--all-extras"]
+    else:
+        for extra in policy["extras"]:
+            options += ["--extra", extra]
     if Path(directory).resolve() != root:
         member = tomllib.loads((Path(directory) / "pyproject.toml").read_text())["project"]["name"]
         options += ["--package", member]

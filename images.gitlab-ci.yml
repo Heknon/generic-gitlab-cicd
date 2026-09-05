@@ -1,48 +1,50 @@
-stages:
-- prepare
-- build
-include:
-- local: /templates/container-build.yml
-  inputs:
-    name: python-runtime-validate
-    context: images/python
-    dockerfile-directory: images/python
-    destination: $CI_IMAGES_REPOSITORY/python:$CI_COMMIT_SHA
-    base-image: $PYTHON_BASE_IMAGE
-    rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - when: never
-    dependencies:
-    - runtime-wheelhouse
-- local: /templates/container-build.yml
-  inputs:
-    name: python-runtime-push
-    context: images/python
-    dockerfile-directory: images/python
-    destination: $CI_IMAGES_REPOSITORY/python:$CI_COMMIT_SHA
-    base-image: $PYTHON_BASE_IMAGE
-    push: true
-    rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true"
-      when: manual
-    - when: never
-    dependencies:
-    - runtime-wheelhouse
+# Internal image factory. Every base already contains its role tools, Python 3.11+
+# and certificate-update support. Supply all variables from protected GitLab config.
+stages: [prepare, build]
+
 runtime-wheelhouse:
   stage: prepare
   image: $PYTHON_BASE_IMAGE
   script:
-  - test -n "$PIP_INDEX_URL"
-  - 'python -m pip download --only-binary=:all: --require-hashes -r images/python/requirements.lock
-    --dest images/python/wheelhouse/'
-  - python -m pip install --no-index --find-links=images/python/wheelhouse --require-hashes -r images/python/requirements.lock
-  - python -m build --no-isolation --wheel --outdir images/python/wheelhouse
-  - python scripts/hash_toolkit_wheel.py
+    - test -n "$PIP_INDEX_URL"
+    - python -m pip download --only-binary=:all: --require-hashes -r images/python/requirements.lock --dest images/python/wheelhouse/
+    - python -m pip install --no-index --find-links=images/python/wheelhouse --require-hashes -r images/python/requirements.lock
+    - python -m build --no-isolation --wheel --outdir images/python/wheelhouse
+    - python scripts/hash_toolkit_wheel.py
   artifacts:
-    paths:
-    - images/python/wheelhouse/
+    paths: [images/python/wheelhouse/]
     expire_in: 1 day
   rules:
-  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  - if: $CI_COMMIT_REF_PROTECTED == "true"
-  - when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_REF_PROTECTED == "true"'
+
+runtime-images:
+  stage: build
+  image: $BUILDAH_FACTORY_IMAGE
+  tags: [image-builder]
+  needs: [runtime-wheelhouse]
+  parallel:
+    matrix:
+      - ROLE: [python, node, bun, helm, buildah]
+  script:
+    - |
+      set -eu
+      case "$ROLE" in
+        python) base="$PYTHON_BASE_IMAGE" ;;
+        node) base="$NODE_BASE_IMAGE" ;;
+        bun) base="$BUN_BASE_IMAGE" ;;
+        helm) base="$HELM_BASE_IMAGE" ;;
+        buildah) base="$BUILDAH_BASE_IMAGE" ;;
+        *) exit 1 ;;
+      esac
+      test -n "$base"
+      test -n "$CI_IMAGES_REPOSITORY"
+      image="$CI_IMAGES_REPOSITORY/$ROLE:$CI_COMMIT_SHA"
+      buildah build --build-arg "BASE_IMAGE=$base" --tag "$image" --file images/python/Dockerfile images/python
+      if [ "$CI_COMMIT_REF_PROTECTED" = "true" ] && [ "$CI_PIPELINE_SOURCE" != "merge_request_event" ]; then
+        buildah push "$image" "docker://$image"
+      fi
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
