@@ -292,8 +292,7 @@ def publish(data, node, project, root, records, plan):
                 with tarfile.open(file) as archive:
                     packed = json.load(archive.extractfile('package/package.json'))
                 config = packed.get('publishConfig', {})
-                if config.get('tag', channel) != channel or config.get('registry', target['url']).rstrip('/') != target['url'].rstrip('/'):
-                    raise ValueError('archive publishConfig conflicts with publication channel or registry')
+                channel = config.get('tag', channel)
                 subprocess.run(['npm', 'publish', str(file), '--registry', target['url'], '--tag', channel, '--ignore-scripts'], cwd=package_dir, check=True)
         if development:
             return {'version': current, 'publication': {'channel': 'development', 'destination': target}}

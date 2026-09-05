@@ -48,8 +48,8 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(data['nodes']['push:sdk:build-package']['needs'], ['push:sdk:unit'])
         self.assertIn('push:sdk:build-package', data['nodes']['push:sdk:publish']['needs'])
         bad = config(); bad['projects']['sdk']['package'].pop('preview')
-        with self.assertRaisesRegex(ValueError, 'preview package destination'):
-            compile_pipeline(Pipeline.model_validate(bad), infra())
+        _, fallback = compile_pipeline(Pipeline.model_validate(bad), infra())
+        self.assertIn('push:sdk:publish', fallback['nodes'])
 
     def test_release_and_development_events_are_distinct(self):
         c = config(); p = c['projects']['sdk']; p['release'] = {'tag': 'v{version}'}
@@ -70,36 +70,37 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaises(ValueError): snapshot_version('1.5.0.post1')
         for value, node, channel in [('1.5.0', False, 'latest'), ('1.5.0b1', False, 'beta'), ('1.5.0rc1', False, 'rc'), ('1.5.0-beta.1', True, 'beta')]:
             self.assertEqual(release_channel(value, node), channel)
-        for value, node in [('1.5.0.dev1', False), ('1.5.0-dev.1', True), ('1.5.0-latest', True)]:
-            with self.assertRaises(ValueError): release_channel(value, node)
+        for value, node, expected in [('1.5.0.dev1', False, 'dev'), ('1.5.0-dev.1', True, 'dev'), ('1.5.0-canary.1', True, 'canary'), ('1.5.0-latest', True, 'latest')]:
+            self.assertEqual(release_channel(value, node), expected)
 
-    def test_python_preview_is_explicit_and_isolated(self):
+    def test_python_index_policy_is_user_owned(self):
         project = Pipeline.model_validate(config()).model_dump()['projects']['sdk']
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp); file = directory / 'pyproject.toml'; file.write_text(python_manifest())
             self.assertEqual(destination(project, directory, ['registry.internal'], True)['index'], 'preview')
             file.write_text(python_manifest().replace('explicit = true', 'explicit = false'))
-            with self.assertRaisesRegex(ValueError, 'explicit=true'):
-                destination(project, directory, ['registry.internal'], True)
+            self.assertEqual(destination(project, directory, ['registry.internal'], True)['index'], 'preview')
             file.write_text(python_manifest().replace('https://registry.internal/preview"', 'https://registry.internal/release/"'))
-            with self.assertRaisesRegex(ValueError, 'normal indexes'):
-                destination(project, directory, ['registry.internal'], True)
+            self.assertEqual(destination(project, directory, ['registry.internal'], True)['url'], 'https://registry.internal/release')
+            project['package']['preview'] = None
+            self.assertEqual(destination(project, directory, ['registry.internal'], True)['index'], 'release')
 
-    def test_node_preview_cannot_alias_release(self):
+    def test_node_registry_policy_is_user_owned(self):
         project = Pipeline.model_validate(config(True)).model_dump()['projects']['sdk']
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
             (directory / 'package.json').write_text(json.dumps({'name': 'sdk', 'version': '1.5.0', 'publishConfig': {'registry': 'https://registry.internal/preview/'}}))
-            with self.assertRaisesRegex(ValueError, 'must differ'):
-                destination(project, directory, ['registry.internal'], True)
+            self.assertEqual(destination(project, directory, ['registry.internal'], True)['url'], 'https://registry.internal/preview')
+            project['package']['preview'] = None
+            self.assertEqual(destination(project, directory, ['registry.internal'], True)['url'], 'https://registry.internal/preview')
 
-    def test_forks_and_candidates_cannot_publish(self):
+    def test_development_context_does_not_police_forks_or_candidates(self):
         plan = {'event': 'merge-request', 'candidates': []}
         with patch.dict(os.environ, {'CI_PROJECT_ID': '1', 'CI_MERGE_REQUEST_SOURCE_PROJECT_ID': '2', 'CI_MERGE_REQUEST_TARGET_PROJECT_ID': '1'}, clear=True):
-            with self.assertRaisesRegex(ValueError, 'same-project'): check_development_context(plan)
+            check_development_context(plan)
             os.environ['CI_MERGE_REQUEST_SOURCE_PROJECT_ID'] = '1'
             check_development_context(plan)
-            with self.assertRaisesRegex(ValueError, 'candidate'): check_development_context({**plan, 'candidates': [{}]})
+            check_development_context({**plan, 'candidates': [{}]})
 
     def test_python_snapshot_copy_rewrite(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'CI_PIPELINE_ID': '4821'}):

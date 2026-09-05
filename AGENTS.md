@@ -36,7 +36,7 @@
 
 ## Package publication
 
-- Development snapshots use an isolated preview destination and temporary manifest copy; never mutate the checked-out version or silently publish snapshots to release indexes.
+- Development snapshots use a temporary manifest copy. Preview destinations are optional overrides; absent an override, use the normal package destination. Recommend separation without enforcing organizational publication policy.
 - Preserve checks and explicit artifact prerequisites when inferring package builds from publication.
-- Distinct configured URLs cannot prove Artifactory virtual repository isolation. Document server-side membership and preview-only credential requirements.
-- Preserve archive metadata validation, exact-version receipts, same-project MR restrictions and candidate-publication rejection. Never overwrite or delete existing registry versions to fix a retry.
+- Distinct configured URLs cannot prove Artifactory virtual repository isolation. Document repository membership and scoped credentials as recommendations.
+- Preserve archive metadata validation and exact-version receipts. Development publication must not police fork status, candidate inputs, or shared repository choices. Leave registry permissions and overwrite policy to the configured platform; do not delete existing versions to fix a retry.

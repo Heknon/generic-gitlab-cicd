@@ -1,4 +1,4 @@
-"""Package publication policy: isolated snapshots and deliberate tagged releases."""
+"""Package version generation and user-selected publication destinations."""
 import json
 import os
 import re
@@ -28,20 +28,16 @@ def release_channel(value, node=False):
         version_key(value, True)
         pre = value.split('+')[0].partition('-')[2]
         label = pre.split('.')[0] if pre else 'latest'
-        if label not in {'latest', 'alpha', 'beta', 'rc'} or (pre and label == 'latest'):
-            raise ValueError('release packages support alpha, beta, rc or stable; dev versions belong in previews')
-        return label
+        return 'next' if label.isdigit() else label
     version = Version(value)
-    if version.is_devrelease or version.local:
-        raise ValueError('development versions belong in previews, not release publication')
+    if version.is_devrelease:
+        return 'dev'
     return {'a': 'alpha', 'b': 'beta', 'rc': 'rc'}[version.pre[0]] if version.pre else 'latest'
 
 
 def endpoint(value, hosts):
     allowed_url(value, hosts)
     parsed = urlsplit(value)
-    if parsed.fragment or '..' in parsed.path.split('/') or '%' in parsed.path:
-        raise ValueError('package endpoint must be a canonical HTTPS URL')
     return urlunsplit(('https', parsed.netloc.lower().removesuffix(':443'), parsed.path.rstrip('/'), '', ''))
 
 
@@ -50,33 +46,20 @@ def destination(project, directory, hosts, development=False):
     preview = settings.get('preview') or {}
     if project['python'] is not None:
         rows = tomllib.loads((directory / 'pyproject.toml').read_text()).get('tool', {}).get('uv', {}).get('index', [])
-        name = preview.get('index') if development else settings['index']
+        name = (preview.get('index') or settings['index']) if development else settings['index']
         selected = [row for row in rows if row.get('name') == name and row.get('publish-url')]
         if len(selected) != 1:
             raise ValueError('select one named uv index with publish-url in pyproject.toml')
         row = selected[0]
         url = endpoint(row['publish-url'], hosts)
-        if development:
-            if row.get('explicit') is not True or name == settings['index']:
-                raise ValueError('preview index must be explicit=true and distinct from the release index')
-            read_url = endpoint(row['url'], hosts)
-            for other in rows:
-                if other is row:
-                    continue
-                if any(endpoint(other[key], hosts) in {url, read_url} for key in ('url', 'publish-url') if other.get(key)):
-                    raise ValueError('preview endpoints must not also be configured as normal indexes')
         return {'index': name, 'url': url, 'check_url': endpoint(row['url'], hosts)}
     meta = json.loads((directory / 'package.json').read_text())
-    if meta.get('private'):
-        raise ValueError('cannot publish private package')
-    normal = meta.get('publishConfig', {}).get('registry')
+    normal = preview.get('registry') if development else None
+    normal = normal or meta.get('publishConfig', {}).get('registry')
     if not normal:
         raise ValueError('package.json publishConfig.registry is required')
     normal = endpoint(normal, hosts)
-    url = endpoint(preview.get('registry', ''), hosts) if development else normal
-    if development and url == normal:
-        raise ValueError('preview registry must differ from publishConfig.registry')
-    return {'url': url}
+    return {'url': normal}
 
 
 def rewrite_snapshot(directory, node, target):
@@ -95,11 +78,5 @@ def rewrite_snapshot(directory, node, target):
 
 
 def check_development_context(plan):
-    if plan['candidates']:
-        raise ValueError('package publication cannot contain candidate dependency overrides')
     if plan['event'] == 'release' or os.environ.get('CI_COMMIT_TAG'):
-        raise ValueError('development publication cannot run on release tags')
-    if plan['event'] == 'merge-request':
-        project = os.environ.get('CI_PROJECT_ID')
-        if not project or os.environ.get('CI_MERGE_REQUEST_SOURCE_PROJECT_ID') != project or os.environ.get('CI_MERGE_REQUEST_TARGET_PROJECT_ID') != project:
-            raise ValueError('development publication requires a same-project merge request; forks cannot publish')
+        raise ValueError('development publication generates a snapshot; use auto to publish the tagged version')

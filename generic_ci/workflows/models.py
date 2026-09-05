@@ -53,8 +53,8 @@ class Container(Model):
     _paths = field_validator('dockerfile', 'context')(relative)
 
 class PreviewPackage(Model):
-    index: str | None = Field(default=None, description="Python named uv index, marked explicit=true and isolated from normal indexes.")
-    registry: str | None = Field(default=None, description="Node preview registry URL, separate from publishConfig.registry.")
+    index: str | None = Field(default=None, description="Optional Python named uv index override for development publication.")
+    registry: str | None = Field(default=None, description="Optional Node registry override for development publication.")
 
     @model_validator(mode='after')
     def one_destination(self):

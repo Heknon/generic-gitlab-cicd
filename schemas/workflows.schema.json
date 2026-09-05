@@ -651,7 +651,7 @@
             }
           ],
           "default": null,
-          "description": "Python named uv index, marked explicit=true and isolated from normal indexes.",
+          "description": "Optional Python named uv index override for development publication.",
           "title": "Index"
         },
         "registry": {
@@ -664,7 +664,7 @@
             }
           ],
           "default": null,
-          "description": "Node preview registry URL, separate from publishConfig.registry.",
+          "description": "Optional Node registry override for development publication.",
           "title": "Registry"
         }
       },

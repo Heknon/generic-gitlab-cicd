@@ -19,5 +19,6 @@ projects:
         checks: [unit]
         publish: {channel: auto}
 # Configure the named uv indexes in packages/sdk/pyproject.toml.
-# The preview index requires explicit=true and an isolated repository.
+# Recommended: explicit=true and a separate repository to avoid accidental consumption.
+# Omit package.preview to use the normal publishing destination.
 # See docs/workflows-revision-one.md, Package publication — revision four.

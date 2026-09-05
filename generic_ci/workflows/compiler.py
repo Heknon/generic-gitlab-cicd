@@ -118,9 +118,6 @@ def compile_pipeline(pipeline, platform, sources=None):
                 if channel == 'development':
                     if event == 'release':
                         raise ValueError(f'{name}: development publication cannot run on release tags')
-                    preview = (project['package'] or {}).get('preview')
-                    if not preview or not (preview.get('index') if project['python'] is not None else preview.get('registry')):
-                        raise ValueError(f'{name}: development publication requires an explicit preview package destination')
                 elif event != 'release':
                     raise ValueError(f'{name}: auto publication requires a release workflow')
                 if 'package' not in operations:

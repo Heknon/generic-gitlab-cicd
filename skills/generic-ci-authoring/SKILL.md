@@ -13,7 +13,7 @@ Load additional references only for the task at hand:
 - `references/examples/`: runnable configuration examples for delivery, Python packages, Bun backends, React builds and a pnpm SDK/API workspace; platform.yml supplies illustrative infrastructure.
 - `references/schemas/`: bundled workflow, platform, source and source-project JSON Schemas for offline inspection. Installed CLI schema takes precedence if versions differ.
 
-For package publication, read the revision-four section of [workflow contracts](references/workflows.md). Development packages require isolated preview destinations and exact-version consumption; prerelease opt-in alone does not isolate branch builds. Publication automatically selects its package build.
+For package publication, read the revision-four section of [workflow contracts](references/workflows.md). Recommend isolated preview destinations and exact-version consumption for development packages, but honor the team’s chosen index policy. Preview overrides are optional; prerelease opt-in alone does not isolate branch builds. Publication automatically selects its package build.
 
 Preserve these contracts:
 
