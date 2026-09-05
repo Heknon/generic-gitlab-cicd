@@ -33,7 +33,7 @@ class ProjectConfig(Model):
 
 class Manifest(Model):
     version: int = 1
-    cli: str = '>=0.3.0,<0.4.0'
+    cli: str = '>=0.4.0,<0.5.0'
     defaults: dict[str, str] = Field(default_factory=dict)
     templates: dict[str, str] = Field(default_factory=dict)
 

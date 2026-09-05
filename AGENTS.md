@@ -29,7 +29,7 @@
 
 ## AI documentation
 
-- Read docs/ai-authoring-revision-three.md for consumer authoring; docs/cli-reference.md defines CLI/path contracts.
+- Read docs/ai-authoring.md for consumer authoring; docs/cli-reference.md defines CLI/path contracts.
 - The portable authoring skill lives under skills/generic-ci-authoring. Keep it self-contained for installations outside this repository.
 - Update canonical docs/examples/schemas, then run python scripts/sync_authoring_skill.py. CI checks the bundle with --check.
 - Distinguish implemented workflow/source interfaces from historical design documents and the unimplemented MCP server.
@@ -49,8 +49,17 @@
 
 ## Test layers and cost
 
-- Follow docs/testing-revision-one.md. Use affected unittest classes and `python tools/testing/local.py --scenario NAME` while fixing; run the full inexpensive suite before finalizing.
+- Follow docs/testing.md. Use affected unittest classes and `python tools/testing/local.py --scenario NAME` while fixing; run the full inexpensive suite before finalizing.
 - `npm ci --ignore-scripts` installs the pinned maintainer-only gitlab-ci-local tool. Local pipeline tests use isolated workspaces and artifacts; never disable schema validation or receipt assertions to get a pass.
 - Real GitLab E2E is deliberate: workflow dispatch or the same-repository PR label `run-gitlab-e2e`. Remove the label after qualification to avoid expensive runs on later commits. No nightly or broad matrix by default.
 - E2E requires Docker; missing Docker means not run, never passed. The native manual-gate fixture is not evidence of a Helm rollout. Preserve exact scenario/commit/version evidence and keep failed expectations independent from implementation.
 - Helm must be present in release validation; do not count skipped chart tests as a successful release gate.
+
+## Delivery contract 0.4
+
+- Workflow payloads use runtime protocol 2 / series 0.4. Compatible patch releases may interoperate; bump the protocol/series whenever runtime semantics or required fields cease to be backward compatible. Legacy payloads retain exact-version checks.
+- Bash with pipefail is required. Do not silently fall back to sh or hide failures through pipes.
+- Package publication is explicit; `release.gitlab` alone enables GitLab Release API calls. Deployment gates must retain coordinated release completion and publication receipts, including partial deployments.
+- `workflows/selection.py` owns the selection closure for native rules, runtime and explain. Preserve required producers, chart/value inputs, candidate propagation and stop-job rules. Native filtering cannot be weakened to make fixtures pass.
+- Doctor/explain/upgrade previews execute no application commands. Upgrade stages before writing; source/template ownership and rollback behavior are tested.
+- Keep expensive GitLab/registry/cluster qualification deliberate; report absent infrastructure as not run. New local release fixtures do not prove actual registry uploads or Helm rollouts.

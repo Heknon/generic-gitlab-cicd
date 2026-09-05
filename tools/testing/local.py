@@ -34,11 +34,14 @@ def run(name, destination):
         git(root, 'init', '-b', 'main'); git(root, 'config', 'user.email', 'fixture@example.test'); git(root, 'config', 'user.name', 'Fixture')
         git(root, 'remote', 'add', 'origin', 'https://fixture.internal/team/consumer.git')
         git(root, 'add', '.'); git(root, 'commit', '-m', 'baseline'); before = git(root, 'rev-parse', 'HEAD')
+        git(root, 'update-ref', 'refs/remotes/origin/main', before)
+        git(root, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
         (root / 'producer/README').write_text('changed\n'); git(root, 'commit', '-am', 'change producer')
         env = {k: v for k, v in os.environ.items() if not k.startswith(('CI_', 'TOOLKIT_', 'GCL_'))}
+        release_vars = ['--variable', 'CI_COMMIT_TAG=fixture/v1.0.0', '--variable', 'CI_COMMIT_REF_PROTECTED=true'] if name.startswith('release-') else []
         result = subprocess.run([str(executable), '--cwd', '.', '--home', str(root / 'isolated-home'),
             '--force-shell-executor', '--shell-isolation', '--no-artifacts-to-source', '--no-color',
-            '--variable', 'CI_PIPELINE_SOURCE=push', '--variable', 'CI_COMMIT_BRANCH=main', '--variable', f'CI_COMMIT_BEFORE_SHA={before}'],
+            '--variable', 'CI_PIPELINE_SOURCE=push', '--variable', 'CI_COMMIT_BRANCH=main', '--variable', f'CI_COMMIT_BEFORE_SHA={before}', *release_vars],
             cwd=root, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
         (destination / (name + '.log')).write_text(result.stdout)
         receipts = []
@@ -49,17 +52,19 @@ def run(name, destination):
         expected = [('producer', 'check'), ('producer', 'application')]
         if name != 'selection':
             expected.append(('consumer', 'check'))
-        if name == 'failed-gate':
-            if result.returncode == 0 or receipts or 'expected-gate-failure' not in result.stdout:
+        if name.startswith('release-'):
+            expected += [('producer', 'version'), ('consumer', 'version'), ('producer', 'release'), ('consumer', 'release')]
+        if name in {'failed-gate', 'piped-failure', 'release-failure'}:
+            if result.returncode == 0 or any(action != 'version' for _, action in receipts) or 'expected-gate-failure' not in result.stdout:
                 raise AssertionError('failed check did not block all downstream work')
         else:
             if result.returncode or any(r not in receipts for r in expected):
                 raise AssertionError(f'{name} failed or lacked success receipts; inspect {destination / (name + ".log")}')
-            if name == 'selection' and any(p == 'consumer' for p, _ in receipts):
+            if name == 'selection' and ('Project not selected' in result.stdout or any(p == 'consumer' for p, _ in receipts)):
                 raise AssertionError('unaffected consumer executed')
             if name == 'matrix' and receipts.count(('producer', 'check')) != 2:
                 raise AssertionError('not every matrix gate executed')
-        return {'scenario': name, 'status': 'passed', 'expected_failure': name == 'failed-gate', 'returncode': result.returncode}
+        return {'scenario': name, 'status': 'passed', 'expected_failure': name in {'failed-gate', 'piped-failure', 'release-failure'}, 'returncode': result.returncode}
 
 
 def main():

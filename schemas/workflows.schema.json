@@ -77,6 +77,77 @@
       "title": "Build",
       "type": "object"
     },
+    "Cache": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/CacheKey"
+            }
+          ],
+          "title": "Key"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Paths",
+          "type": "array"
+        },
+        "policy": {
+          "default": "pull-push",
+          "enum": [
+            "pull",
+            "push",
+            "pull-push"
+          ],
+          "title": "Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "paths"
+      ],
+      "title": "Cache",
+      "type": "object"
+    },
+    "CacheKey": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "CacheKey",
+      "type": "object"
+    },
     "Chart": {
       "additionalProperties": false,
       "properties": {
@@ -225,6 +296,18 @@
           "additionalProperties": true,
           "title": "Artifacts",
           "type": "object"
+        },
+        "cache": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cache"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Native GitLab cache mapping; paths are repository-relative. Cache downloads, not prepared environments or receipts."
         },
         "script": {
           "description": "Team-owned commands, executed after preparation.",
@@ -540,6 +623,18 @@
           "additionalProperties": true,
           "title": "Artifacts",
           "type": "object"
+        },
+        "cache": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cache"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Native GitLab cache mapping; paths are repository-relative. Cache downloads, not prepared environments or receipts."
         }
       },
       "title": "Execution",
@@ -767,7 +862,10 @@
               "merge-request",
               "release",
               "manual",
-              "schedule"
+              "schedule",
+              "api",
+              "trigger",
+              "pipeline"
             ]
           },
           "title": "Workflows",
@@ -879,6 +977,12 @@
         "require-bump": {
           "default": true,
           "title": "Require-Bump",
+          "type": "boolean"
+        },
+        "gitlab": {
+          "default": false,
+          "description": "Create a GitLab Release after successful delivery; requires TOOLKIT_RELEASE_TOKEN.",
+          "title": "Gitlab",
           "type": "boolean"
         },
         "tag": {

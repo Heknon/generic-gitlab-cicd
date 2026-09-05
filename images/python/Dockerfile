@@ -1,4 +1,4 @@
-# BASE_IMAGE must already contain Python 3.11+, Git and update-ca-certificates.
+# BASE_IMAGE must already contain Python 3.11+, Bash, Git and update-ca-certificates.
 # Use an approved internally mirrored base digest. No public syntax frontend.
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
@@ -21,6 +21,7 @@ RUN python -m pip install --no-index --find-links=/tmp/wheelhouse --require-hash
     && python -m pip install --no-index --find-links=/tmp/wheelhouse --no-deps --require-hashes -r /tmp/wheelhouse/toolkit-requirements.txt \
     && python -m pip check \
     && uv --version \
+    && bash --version
     && git --version \
     && python -m twine --version \
     && python -c "import tomlkit, packaging, build, yaml" \

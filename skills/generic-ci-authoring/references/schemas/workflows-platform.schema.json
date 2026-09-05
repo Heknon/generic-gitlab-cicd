@@ -35,6 +35,77 @@
       "title": "Builder",
       "type": "object"
     },
+    "Cache": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/CacheKey"
+            }
+          ],
+          "title": "Key"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Paths",
+          "type": "array"
+        },
+        "policy": {
+          "default": "pull-push",
+          "enum": [
+            "pull",
+            "push",
+            "pull-push"
+          ],
+          "title": "Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "paths"
+      ],
+      "title": "Cache",
+      "type": "object"
+    },
+    "CacheKey": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "CacheKey",
+      "type": "object"
+    },
     "Execution": {
       "additionalProperties": false,
       "properties": {
@@ -116,6 +187,18 @@
           "additionalProperties": true,
           "title": "Artifacts",
           "type": "object"
+        },
+        "cache": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cache"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Native GitLab cache mapping; paths are repository-relative. Cache downloads, not prepared environments or receipts."
         }
       },
       "title": "Execution",
@@ -202,10 +285,26 @@
       "type": "object"
     },
     "container-builder": {
-      "$ref": "#/$defs/Builder"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Builder"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "registries": {
-      "$ref": "#/$defs/Registries"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Registries"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "allowed-hosts": {
       "items": {
@@ -241,8 +340,6 @@
   },
   "required": [
     "images",
-    "container-builder",
-    "registries",
     "allowed-hosts"
   ],
   "title": "Platform",

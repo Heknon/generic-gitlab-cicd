@@ -1,4 +1,4 @@
-# Internal image factory. Every base already contains its role tools, Python 3.11+
+# Internal image factory. Every base already contains its role tools, Bash, Python 3.11+
 # and certificate-update support. Supply all variables from protected GitLab config.
 stages: [prepare, build]
 

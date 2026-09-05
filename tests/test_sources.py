@@ -22,7 +22,7 @@ class SourceTests(unittest.TestCase):
         self.env = patch.dict(os.environ, {'GENERIC_CI_HOME': str(self.root / 'home')})
         self.env.start(); self.addCleanup(self.env.stop)
         self.git('init', '-b', 'main')
-        self.put('generic-ci-source.yml', {'version':1,'cli':'>=0.3,<0.4','defaults':{'platform':'defaults/platform.yml'},'templates':{'simple':'templates/simple'}})
+        self.put('generic-ci-source.yml', {'version':1,'cli':'>=0.4,<0.5','defaults':{'platform':'defaults/platform.yml'},'templates':{'simple':'templates/simple'}})
         self.put('defaults/platform.yml', {'defaults':{'tags':['internal']},'images':{'python':'registry.internal/python'},'container-builder':{'image':'registry.internal/buildah'},'registries':{'containers':'registry.internal/apps','previews':'registry.internal/previews'},'allowed-hosts':['registry.internal']})
         self.put('templates/simple/delivery.yml', {'projects':{'app':{'path':'.','checks':{'custom':{'script':['true']}},'workflows':{'push':{'checks':['custom']}}}}})
         self.commit()
@@ -85,6 +85,23 @@ class SourceTests(unittest.TestCase):
         (self.consumer/'local.yml').write_text('defaults:\n  tags: [local]\n')
         _,p,o,_=load_project(self.consumer,platform_override='local.yml')
         self.assertEqual(p.defaults.tags,['local']);self.assertEqual(o['platform']['defaults.tags'],'project:local.yml')
+
+    def test_upgrade_stages_source_change_and_preserves_owned_files(self):
+        self.init()
+        original=(self.consumer/'delivery.yml').read_bytes()
+        before=(self.consumer/'generic-ci.lock.json').read_bytes()
+        data=yaml.safe_load((self.repo/'defaults/platform.yml').read_text())
+        data['defaults']['tags']=['updated']
+        self.put('defaults/platform.yml',data); new=self.commit()
+        code,text=self.cli('upgrade','--root',str(self.consumer),'--source-ref','main')
+        self.assertEqual(code,0,text)
+        self.assertEqual((self.consumer/'generic-ci.lock.json').read_bytes(),before)
+        code,text=self.cli('upgrade','--root',str(self.consumer),'--source-ref','main','--runtime-image','python=registry.internal/python:0.4','--apply')
+        self.assertEqual(code,0,text)
+        self.assertEqual((self.consumer/'delivery.yml').read_bytes(),original)
+        self.assertEqual(json.loads((self.consumer/'generic-ci.lock.json').read_text())['commit'],new)
+        self.assertEqual(load_project(self.consumer)[1].images['python'],'registry.internal/python:0.4')
+        self.assertEqual(self.cli('render','--root',str(self.consumer),'--check','-o',str(self.consumer/'.gitlab-ci.yml'))[0],0)
 
     def test_bundle_import_on_fresh_cache(self):
         self.init();bundle=self.root/'source.bundle';self.git('bundle','create',str(bundle),'--all')

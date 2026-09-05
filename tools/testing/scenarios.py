@@ -9,13 +9,15 @@ import yaml
 from generic_ci.workflows.compiler import compile_pipeline
 from generic_ci.workflows.models import Pipeline, Platform
 
-SCENARIOS = ('handoff', 'failed-gate', 'matrix', 'selection')
+SCENARIOS = ('handoff', 'failed-gate', 'matrix', 'selection', 'piped-failure', 'release-completion', 'release-failure')
 
 
 def fixture(root, scenario, image='fixture.internal/python', event='push'):
     """Keep generated scripts, rules, needs and artifacts intact in both runners."""
     if scenario not in SCENARIOS:
         raise ValueError('unknown scenario: ' + scenario)
+    if scenario.startswith('release-'):
+        event = 'release'
     a = {'path': 'producer', 'checks': {'verify': {'script': ['true']}},
          'build': {'script': ['export VALUE=artifact-proof', 'mkdir -p generated', 'echo "$VALUE" > generated/payload'],
                    'outputs': ['generated']},
@@ -23,8 +25,14 @@ def fixture(root, scenario, image='fixture.internal/python', event='push'):
     b = {'path': 'consumer', 'depends-on': ['producer'], 'checks': {'consume': {
         'script': ['test "$(cat ../producer/generated/payload)" = artifact-proof'], 'needs': ['producer.build']}},
         'workflows': {event: {'checks': ['consume']}}}
-    if scenario == 'failed-gate':
+    if scenario in {'failed-gate', 'release-failure'}:
         a['checks']['verify']['script'] = ['echo expected-gate-failure; exit 7']
+    if scenario == 'piped-failure':
+        a['checks']['verify']['script'] = ['echo expected-gate-failure; false | cat']
+    if scenario.startswith('release-'):
+        for p in (a, b):
+            p['release'] = {'tag': 'fixture/v{version}', 'version': {'file': 'version.json', 'field': 'version'}, 'require-bump': False}
+        b['release']['needs'] = ['producer']
     if scenario == 'matrix':
         a['checks']['verify'].update(parallel={'matrix': [{'FLAVOR': ['one', 'two']}]},
                                     script=['test "$FLAVOR" = one || test "$FLAVOR" = two'])
@@ -40,6 +48,8 @@ def fixture(root, scenario, image='fixture.internal/python', event='push'):
     for name in ('producer', 'consumer'):
         (root / name).mkdir(parents=True, exist_ok=True)
         (root / name / 'README').write_text(name + '\n')
+        if scenario.startswith('release-'):
+            (root / name / 'version.json').write_text('{"version": "1.0.0"}\n')
     shutil.copytree(ROOT / 'generic_ci', root / 'generic_ci', ignore=shutil.ignore_patterns('__pycache__'), dirs_exist_ok=True)
     (root / 'delivery.yml').write_text(yaml.safe_dump(config, sort_keys=False))
     (root / 'ci-platform.yml').write_text(yaml.safe_dump(infra, sort_keys=False))

@@ -32,7 +32,12 @@ def read_yaml(path):
     text = Path(path).read_text()
     if len(text) > 2_000_000:
         raise ValueError("configuration exceeds 2 MB")
-    return yaml.load(text, Loader=UniqueLoader)
+    try:
+        return yaml.load(text, Loader=UniqueLoader)
+    except yaml.YAMLError as error:
+        mark = getattr(error, 'problem_mark', None)
+        where = f' at line {mark.line + 1}, column {mark.column + 1}' if mark else ''
+        raise ValueError(f'{path}: invalid YAML{where}: {getattr(error, "problem", "parse error")}') from None
 
 
 def allowed_url(value, hosts, *, registry=False):

@@ -1,3 +1,3 @@
-"""Public configuration compiler. Runtime images must carry this exact version."""
+"""Public configuration compiler. Workflow runtimes use an explicit compatibility protocol; legacy runtimes require this exact version."""
 
-__version__ = "0.3.4"
+__version__ = "0.4.0"

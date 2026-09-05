@@ -5,3 +5,5 @@ Configure your organization source defaults before adoption. The bundled Artifac
 Run `generic-ci validate`, then `generic-ci render -o .gitlab-ci.yml`. Commit delivery.yml, generic-ci.yml, generic-ci.lock.json and generated CI.
 
 Python/Node starters expect an existing application, its tests, committed lockfile and (for Node services) Dockerfile. The image factory starter supplies example build inputs. Review all commands before running CI.
+
+This starter customizes an already prepared Python toolkit runtime (`BASE_IMAGE`), verifies its required tools, and adds organization index configuration. It does not bootstrap Python/uv/Bash or install the toolkit. For a cold factory, use `images.gitlab-ci.yml` from the toolkit repository with its offline wheelhouse and supplied role bases. The first Buildah factory runtime must be prepared by the platform administrator.

@@ -67,6 +67,8 @@ def deploy(data, node, root, out, records, plan, stop=False):
     settings, infra = node['settings'], data['platform']
     target = infra['targets'][settings['target']]
     preview = node['event'] == 'merge-request'
+    if preview and target['production']:
+        raise ValueError('MR previews require a nonproduction target')
     if not preview and target['production'] and os.environ.get('CI_COMMIT_REF_PROTECTED') != 'true':
         raise ValueError('production requires a protected ref')
     if not preview and plan.get('candidates'):

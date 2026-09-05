@@ -36,7 +36,7 @@ def make_plan(data, root, expected):
             raise ValueError(f'{path} changed; render and commit the pipeline again')
     projects = data['pipeline']['projects']
     source, tag = os.environ.get('CI_PIPELINE_SOURCE'), os.environ.get('CI_COMMIT_TAG', '')
-    event = 'release' if tag else {'merge_request_event': 'merge-request', 'push': 'push', 'web': 'manual', 'schedule': 'schedule'}.get(source)
+    event = 'release' if tag else {'merge_request_event': 'merge-request', 'push': 'push', 'web': 'manual', 'schedule': 'schedule', 'api': 'api', 'trigger': 'trigger', 'pipeline': 'pipeline'}.get(source)
     if event is None:
         raise ValueError('unsupported workflow event')
     changed = None
@@ -45,57 +45,19 @@ def make_plan(data, root, expected):
         try:
             changed = git(root, 'diff', '--name-only', '--no-renames', base, 'HEAD').splitlines()
         except subprocess.CalledProcessError:
-            pass  # Missing shallow baseline conservatively selects everything.
-    selected = set(projects)
-    if changed is not None and not set(changed).intersection(data['sources']):
-        import fnmatch
-        selected = {name for name, p in projects.items() if any(
-            p['path'] == '.' or f == p['path'] or f.startswith(p['path'].rstrip('/') + '/') or
-            any(fnmatch.fnmatch(f, pat) for pat in p['watch']) or f in {'uv.lock', 'package-lock.json', 'pnpm-lock.yaml', 'bun.lock', 'pyproject.toml', 'package.json', 'pnpm-workspace.yaml'}
-            for f in changed)}
-    direct = set(selected)
-    if event == 'release':
-        selected = {name for name, p in projects.items() if matches(tag, p['release'])}
-        direct = set(selected)
-        if not selected:
-            raise ValueError('tag matches no project release')
-    else:
-        while True:
-            more = selected | {name for name, p in projects.items() if set(p['depends_on']) & selected}
-            if more == selected:
-                break
-            selected = more
+            # Native changes rules already selected jobs using this base. Recover it;
+            # selecting all here could require receipts from jobs GitLab omitted.
+            try:
+                subprocess.run(['git', 'fetch', '--no-tags', 'origin', base], cwd=root, check=True, capture_output=True)
+                changed = git(root, 'diff', '--name-only', '--no-renames', base, 'HEAD').splitlines()
+            except subprocess.CalledProcessError:
+                raise ValueError('cannot read change baseline; fetch sufficient Git history and retry the planner') from None
     candidates = resolve_candidates(os.environ, data['platform']['allowed_hosts'], projects)
     if candidates and event == 'release':
         raise ValueError('candidate overrides are forbidden in release workflows')
-    for c in candidates:
-        selected.update(c['projects'])
-    # Close over active deployment checks as well as ordinary project jobs.
-    # Overlapping deployments can activate one another, regardless of declaration order.
-    while True:
-        more = set(selected)
-        active_deployments = set()
-        for name, deployment in data['pipeline']['deployments'].items():
-            owners = {binding['from_'].split('.')[0] for binding in deployment['images']}
-            if event in deployment['workflows'] and owners & selected:
-                active_deployments.add(name)
-                if event == 'merge-request' or deployment['update'] == 'complete':
-                    more.update(owners)
-        for node in data['nodes'].values():
-            active = node['deployment'] in active_deployments if node['deployment'] else node['project'] in selected
-            if node['event'] != event or not active:
-                continue
-            for dep in node['needs']:
-                producer = data['nodes'][dep]
-                deployment = data['pipeline']['deployments'].get(node['deployment'])
-                if deployment and event == 'release' and deployment['update'] == 'partial' and producer['action'] == 'container':
-                    continue
-                if producer['project'] is not None:
-                    more.add(producer['project'])
-        if more == selected:
-            break
-        selected = more
-    plan = {**identity(expected), 'event': event, 'selected': sorted(selected), 'direct': sorted(direct), 'candidates': candidates}
+    from .selection import select
+    selection = select(data, event, changed, candidates, tag)
+    plan = {**identity(expected), 'event': event, **selection, 'candidates': candidates}
     write_json(root / '.ci-out/plan.json', plan)
     print(json.dumps(plan, indent=2))
 
@@ -118,7 +80,7 @@ def api(data, method, path, payload=None, missing=False):
         raise ValueError(f'GitLab API {method} failed with HTTP {error.code}') from None
 
 
-def validate_version(project, root, plan):
+def validate_version(project, root, plan, *, enforce_new=False):
     release = project['release']
     directory = path_in(root, project['path'])
     current = read_version(directory, release)
@@ -127,6 +89,8 @@ def validate_version(project, root, plan):
     if plan['event'] == 'release':
         if tag != os.environ['CI_COMMIT_TAG']:
             raise ValueError(f'release tag must be {tag}')
+        return current
+    if not enforce_new and (plan['event'] != 'merge-request' or not release['require_bump']):
         return current
     target = os.environ.get('CI_MERGE_REQUEST_TARGET_BRANCH_NAME')
     if target and release['require_bump']:
@@ -167,7 +131,7 @@ def create_release(data, project, root):
         if existing['commit']['id'] != os.environ['CI_COMMIT_SHA']:
             raise ValueError('release tag already points to another commit; it will not be moved')
         return {'tag': tag, 'already_exists': True}
-    validate_version(project, root, {'event': 'push'})
+    validate_version(project, root, {'event': 'push'}, enforce_new=True)
     api(data, 'POST', '/repository/tags', {'tag_name': tag, 'ref': os.environ['CI_COMMIT_SHA']})
     return {'tag': tag, 'commit': os.environ['CI_COMMIT_SHA']}
 
@@ -308,10 +272,18 @@ def publish(data, node, project, root, records, plan):
                 subprocess.run(['npm', 'publish', str(file), '--registry', target['url'], '--tag', channel, '--ignore-scripts'], cwd=package_dir, check=True)
         if development:
             return {'version': current, 'publication': {'channel': 'development', 'destination': target}}
+    return {'version': current}
+
+
+def finalize_release(data, project, root, plan):
+    if os.environ.get('CI_COMMIT_REF_PROTECTED') != 'true' or plan['candidates'] or plan['event'] != 'release':
+        raise ValueError('release completion requires a protected tag without candidate dependencies')
+    current = validate_version(project, root, plan)
     tag = project['release']['tag'].format(version=current)
-    existing = api(data, 'GET', '/releases/' + urllib.parse.quote(tag, safe=''), missing=True)
-    if not existing:
-        api(data, 'POST', '/releases', {'tag_name': tag, 'name': tag, 'description': 'Published by verified pipeline ' + os.environ['CI_PIPELINE_ID']})
+    if project['release']['gitlab']:
+        existing = api(data, 'GET', '/releases/' + urllib.parse.quote(tag, safe=''), missing=True)
+        if not existing:
+            api(data, 'POST', '/releases', {'tag_name': tag, 'name': tag, 'description': 'Published by verified pipeline ' + os.environ['CI_PIPELINE_ID']})
     return {'version': current, 'tag': tag}
 
 
@@ -340,7 +312,7 @@ def run_job(data, key, root, expected):
     for upstream in node['needs']:
         producer = data['nodes'][upstream]
         deployment = data['pipeline']['deployments'].get(node['deployment'])
-        if deployment and deployment['update'] == 'partial' and producer['action'] == 'container' and producer['project'] not in plan['selected']:
+        if deployment and deployment['update'] == 'partial' and producer['action'] in {'container', 'release'} and producer['project'] not in plan['selected']:
             continue
         records.append(require_receipt(root, upstream, expected))
     materialize(root, records)
@@ -392,6 +364,8 @@ def run_job(data, key, root, expected):
                 result.update(package_build(project, root, out))
     elif action == 'publish':
         result.update(publish(data, node, project, root, records, plan))
+    elif action == 'release':
+        result.update(finalize_release(data, project, root, plan))
     elif action == 'deploy':
         from .helm import deploy
         result.update(deploy(data, node, root, out, records, plan))

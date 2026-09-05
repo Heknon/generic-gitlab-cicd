@@ -7,7 +7,7 @@ on:
       scenario:
         description: 'One scenario, or all'
         type: choice
-        options: [all, handoff, failed-gate, matrix, selection, merge-request, manual-gate]
+        options: [all, handoff, failed-gate, matrix, selection, piped-failure, release-completion, release-failure, merge-request, manual-gate]
         default: all
   pull_request:
     types: [labeled, synchronize]
