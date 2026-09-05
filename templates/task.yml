@@ -1,0 +1,101 @@
+spec:
+  inputs:
+    name:
+      type: string
+      description: Unique job name, including the service name.
+    image:
+      type: string
+      description: Container image; pin an approved digest for production.
+      default: $PYTHON_CI_IMAGE
+    directory:
+      type: string
+      description: Working directory relative to the consumer repository root.
+      default: .
+    setup:
+      type: array
+      description: Commands run after changing directory. Use locked dependencies.
+      default: []
+    rules:
+      type: array
+      description: GitLab job rules; final matching rule wins only by order (first
+        match).
+      default:
+      - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      - if: $CI_COMMIT_TAG
+      - if: $CI_COMMIT_BRANCH
+    runner-tags:
+      type: array
+      description: Runner selection tags.
+      default: []
+    timeout:
+      type: string
+      description: Job timeout.
+      default: 30m
+    stage:
+      type: string
+      description: Pipeline stage.
+      default: test
+    commands:
+      type: array
+      description: Nonempty array of shell commands.
+    dependencies:
+      type: array
+      description: Exact upstream artifact job names. Stage barriers remain intact.
+      default: []
+    artifact-paths:
+      type: array
+      description: Artifact paths relative to repository root, not directory.
+      default: []
+    junit:
+      type: array
+      description: JUnit report paths relative to repository root.
+      default: []
+    cache-files:
+      type: array
+      description: One or two lock/config files, relative to root.
+      default:
+      - pyproject.toml
+    cache-paths:
+      type: array
+      description: Cache paths relative to root. Cache downloads, never credentials.
+      default: []
+    cache-policy:
+      type: string
+      description: Use pull-push in a designated cache writer.
+      default: pull
+      options:
+      - pull
+      - pull-push
+      - push
+---
+$[[ inputs.name ]]:
+  image: $[[ inputs.image ]]
+  tags: $[[ inputs.runner-tags ]]
+  timeout: $[[ inputs.timeout ]]
+  interruptible: true
+  retry:
+    max: 1
+    when:
+    - runner_system_failure
+    - stuck_or_timeout_failure
+  variables:
+    COMPONENT_DIRECTORY: $[[ inputs.directory ]]
+  before_script:
+  - cd "$CI_PROJECT_DIR/$COMPONENT_DIRECTORY"
+  - $[[ inputs.setup ]]
+  rules: $[[ inputs.rules ]]
+  stage: $[[ inputs.stage ]]
+  dependencies: $[[ inputs.dependencies ]]
+  script: $[[ inputs.commands ]]
+  cache:
+    key:
+      prefix: $[[ inputs.name ]]-$CI_COMMIT_REF_SLUG
+      files: $[[ inputs.cache-files ]]
+    paths: $[[ inputs.cache-paths ]]
+    policy: $[[ inputs.cache-policy ]]
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths: $[[ inputs.artifact-paths ]]
+    reports:
+      junit: $[[ inputs.junit ]]

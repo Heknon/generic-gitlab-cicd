@@ -1,0 +1,86 @@
+spec:
+  inputs:
+    name:
+      type: string
+      description: Unique job name, including the service name.
+    image:
+      type: string
+      description: Container image; pin an approved digest for production.
+      default: $DEPLOY_CI_IMAGE
+    directory:
+      type: string
+      description: Working directory relative to the consumer repository root.
+      default: .
+    setup:
+      type: array
+      description: Commands run after changing directory. Use locked dependencies.
+      default: []
+    rules:
+      type: array
+      description: Protected release tags only by default; manual blocking deployment.
+      default:
+      - if: $CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"
+        when: manual
+      - when: never
+    runner-tags:
+      type: array
+      description: Runner selection tags.
+      default: []
+    timeout:
+      type: string
+      description: Job timeout.
+      default: 30m
+    stage:
+      type: string
+      description: Deployment stage.
+      default: deploy
+    commands:
+      type: array
+      description: Deployment plus health check commands; must fail on unhealthy rollout.
+    dependencies:
+      type: array
+      description: Upstream build artifact jobs.
+      default: []
+    environment:
+      type: string
+      description: GitLab environment name; protect it in project settings.
+      default: production
+    url:
+      type: string
+      description: Environment URL.
+    tier:
+      type: string
+      description: GitLab deployment tier.
+      default: production
+      options:
+      - production
+      - staging
+      - testing
+      - development
+      - other
+---
+$[[ inputs.name ]]:
+  image: $[[ inputs.image ]]
+  tags: $[[ inputs.runner-tags ]]
+  timeout: $[[ inputs.timeout ]]
+  interruptible: false
+  retry: 0
+  variables:
+    COMPONENT_DIRECTORY: $[[ inputs.directory ]]
+  before_script:
+  - cd "$CI_PROJECT_DIR/$COMPONENT_DIRECTORY"
+  - $[[ inputs.setup ]]
+  rules: $[[ inputs.rules ]]
+  stage: $[[ inputs.stage ]]
+  allow_failure: false
+  dependencies: $[[ inputs.dependencies ]]
+  resource_group: $[[ inputs.environment ]]
+  environment:
+    name: $[[ inputs.environment ]]
+    url: $[[ inputs.url ]]
+    deployment_tier: $[[ inputs.tier ]]
+  script:
+  - test -z "${CI_DEPENDENCY_REPO:-}${CI_DEPENDENCY_REF:-}${CI_DEPENDENCY_PACKAGE:-}"
+    && test "${CI_DEPENDENCY_OVERRIDES:-[]}" = '[]' || { echo 'Remove candidate dependency
+    overrides before production publishing/deployment'; exit 1; }
+  - $[[ inputs.commands ]]
