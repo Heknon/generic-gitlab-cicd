@@ -1,0 +1,167 @@
+spec:
+  inputs:
+    name:
+      type: string
+      description: Unique job name, including the service name.
+    image:
+      type: string
+      description: Internal image with Helm 3/4, Python 3 and Kubernetes authentication support.
+      default: $HELM_CI_IMAGE
+    directory:
+      type: string
+      description: Working directory relative to the consumer repository root.
+      default: .
+    setup:
+      type: array
+      description: Commands run after changing directory. Use locked dependencies.
+      default: []
+    runner-tags:
+      type: array
+      description: Runner selection tags.
+      default: []
+    timeout:
+      type: string
+      description: Job timeout.
+      default: 30m
+    stage:
+      type: string
+      description: Both start and stop use the same stage.
+      default: deploy
+    dependencies:
+      type: array
+      description: Build artifact jobs for preview deployment only.
+      default: []
+    url:
+      type: string
+      description: Preview URL, may use CI_MERGE_REQUEST_IID.
+    auto-stop-in:
+      type: string
+      description: Preview lifetime.
+      default: 2 days
+    stop-setup:
+      type: array
+      description: Teardown setup must work without a checkout or build artifacts.
+      default: []
+    change-paths:
+      type: array
+      description: Paths selecting both preview jobs; include shared dependencies.
+      default:
+      - '**/*'
+    deploy-when:
+      type: string
+      description: Run previews manually or automatically.
+      default: manual
+      options:
+      - manual
+      - on_success
+    chart:
+      type: string
+      default: oci://artifactory.example.internal/helm-local/generic-app
+      description: Internal OCI reference or consumer-local chart path.
+    chart-version:
+      type: string
+      default: 1.0.0
+      description: Exact chart version for OCI references.
+    values-file:
+      type: string
+      default: deploy/preview.yaml
+      description: Root-relative baseline Helm values.
+    image-map-json:
+      type: string
+      default: '[]'
+      description: JSON array of app/repository/metadata objects; metadata paths are root-relative BuildKit
+        artifacts.
+    helm-timeout:
+      type: string
+      default: 10m
+      description: Rollout timeout.
+    release-name:
+      type: string
+      default: mr-$CI_PROJECT_ID-$CI_MERGE_REQUEST_IID
+      description: Helm release name.
+    namespace:
+      type: string
+      default: review-$CI_PROJECT_ID-$CI_MERGE_REQUEST_IID
+      description: Target namespace.
+---
+$[[ inputs.name ]]:
+  image: $[[ inputs.image ]]
+  tags: $[[ inputs.runner-tags ]]
+  timeout: $[[ inputs.timeout ]]
+  interruptible: false
+  retry: 0
+  variables:
+    COMPONENT_DIRECTORY: $[[ inputs.directory ]]
+    COMPONENT_CHART: $[[ inputs.chart ]]
+    COMPONENT_CHART_VERSION: $[[ inputs.chart-version ]]
+    COMPONENT_VALUES: $[[ inputs.values-file ]]
+    COMPONENT_IMAGE_MAP: $[[ inputs.image-map-json ]]
+    COMPONENT_HELM_TIMEOUT: $[[ inputs.helm-timeout ]]
+    COMPONENT_RELEASE: $[[ inputs.release-name ]]
+    COMPONENT_NAMESPACE: $[[ inputs.namespace ]]
+  before_script:
+  - cd "$CI_PROJECT_DIR/$COMPONENT_DIRECTORY"
+  - $[[ inputs.setup ]]
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_PROJECT_ID == $CI_PROJECT_ID
+    changes: $[[ inputs.change-paths ]]
+  - when: never
+  stage: $[[ inputs.stage ]]
+  allow_failure: true
+  dependencies: $[[ inputs.dependencies ]]
+  resource_group: $[[ inputs.namespace ]]/$[[ inputs.release-name ]]
+  environment:
+    name: review/$[[ inputs.name ]]/$CI_MERGE_REQUEST_IID
+    url: $[[ inputs.url ]]
+    deployment_tier: development
+    on_stop: $[[ inputs.name ]]-stop
+    auto_stop_in: $[[ inputs.auto-stop-in ]]
+  script:
+  - cd "$CI_PROJECT_DIR"
+  - "python - <<'COMPONENT_PYTHON'\n\"\"\"Convert per-image BuildKit metadata into Helm digest overrides.\"\
+    \"\"\nimport json, os, re\nfrom pathlib import Path\n\ndef main():\n    rows=json.loads(os.environ.get('COMPONENT_IMAGE_MAP','[]'))\n\
+    \    apps={}\n    for row in rows:\n        if row['app'] in apps:raise ValueError('Duplicate application\
+    \ image')\n        metadata=json.loads(Path(row['metadata']).read_text())\n        digest=metadata.get('containerimage.digest','')\n\
+    \        if not re.fullmatch('sha256:[a-f0-9]{64}',digest):raise ValueError('Missing or invalid BuildKit\
+    \ image digest')\n        apps[row['app']]={'image':{'repository':os.path.expandvars(row['repository']),'digest':digest}}\n\
+    \    Path('.ci-image-values.json').write_text(json.dumps({'apps':apps})+'\\n')\nif __name__=='__main__':main()\n\
+    \nCOMPONENT_PYTHON"
+  - "set -eu\ncase \"$(helm version --template '{{.Version}}')\" in\n  v3.*) rollback_flag=--atomic ;;\n\
+    \  v4.*) rollback_flag=--rollback-on-failure ;;\n  *) echo 'Unsupported Helm major version'; exit\
+    \ 1 ;;\nesac\nset -- \"$COMPONENT_RELEASE\" \"$COMPONENT_CHART\" --namespace \"$COMPONENT_NAMESPACE\"\
+    \ --create-namespace --values \"$COMPONENT_VALUES\" --values .ci-image-values.json --wait --timeout\
+    \ \"$COMPONENT_HELM_TIMEOUT\" --history-max 10 \"$rollback_flag\"\nif [ -n \"$COMPONENT_CHART_VERSION\"\
+    \ ]; then set -- \"$@\" --version \"$COMPONENT_CHART_VERSION\"; fi\nhelm upgrade --install \"$@\""
+  when: $[[ inputs.deploy-when ]]
+$[[ inputs.name ]]-stop:
+  image: $[[ inputs.image ]]
+  tags: $[[ inputs.runner-tags ]]
+  timeout: $[[ inputs.timeout ]]
+  interruptible: false
+  retry: 0
+  variables:
+    COMPONENT_DIRECTORY: $[[ inputs.directory ]]
+    GIT_STRATEGY: none
+    COMPONENT_CHART: $[[ inputs.chart ]]
+    COMPONENT_CHART_VERSION: $[[ inputs.chart-version ]]
+    COMPONENT_VALUES: $[[ inputs.values-file ]]
+    COMPONENT_IMAGE_MAP: $[[ inputs.image-map-json ]]
+    COMPONENT_HELM_TIMEOUT: $[[ inputs.helm-timeout ]]
+    COMPONENT_RELEASE: $[[ inputs.release-name ]]
+    COMPONENT_NAMESPACE: $[[ inputs.namespace ]]
+  before_script: $[[ inputs.stop-setup ]]
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_PROJECT_ID == $CI_PROJECT_ID
+    changes: $[[ inputs.change-paths ]]
+  - when: never
+  stage: $[[ inputs.stage ]]
+  allow_failure: true
+  dependencies: []
+  resource_group: $[[ inputs.namespace ]]/$[[ inputs.release-name ]]
+  environment:
+    name: review/$[[ inputs.name ]]/$CI_MERGE_REQUEST_IID
+    action: stop
+  script:
+  - helm uninstall "$COMPONENT_RELEASE" --namespace "$COMPONENT_NAMESPACE" --ignore-not-found --wait --timeout
+    "$COMPONENT_HELM_TIMEOUT"
+  when: manual

@@ -1,0 +1,172 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "apps"
+  ],
+  "properties": {
+    "apps": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z]([a-z0-9-]{0,18}[a-z0-9])?$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "image",
+          "replicas",
+          "config",
+          "resources",
+          "readinessProbe",
+          "service",
+          "ingress"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "replicas": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "image": {
+            "type": "object",
+            "required": [
+              "repository",
+              "digest"
+            ],
+            "properties": {
+              "repository": {
+                "type": "string",
+                "minLength": 1
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            }
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "resources": {
+            "type": "object",
+            "required": [
+              "requests",
+              "limits"
+            ]
+          },
+          "readinessProbe": {
+            "type": "object",
+            "minProperties": 1,
+            "oneOf": [
+              {
+                "required": [
+                  "httpGet"
+                ]
+              },
+              {
+                "required": [
+                  "exec"
+                ]
+              },
+              {
+                "required": [
+                  "tcpSocket"
+                ]
+              },
+              {
+                "required": [
+                  "grpc"
+                ]
+              }
+            ]
+          },
+          "service": {
+            "type": "object",
+            "required": [
+              "enabled",
+              "port",
+              "targetPort"
+            ],
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "targetPort": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            }
+          },
+          "ingress": {
+            "type": "object",
+            "required": [
+              "enabled"
+            ],
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "ingress": {
+                  "properties": {
+                    "enabled": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "service": {
+                  "properties": {
+                    "enabled": {
+                      "const": true
+                    }
+                  }
+                },
+                "ingress": {
+                  "required": [
+                    "host",
+                    "className"
+                  ],
+                  "properties": {
+                    "host": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "className": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array"
+    }
+  }
+}

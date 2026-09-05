@@ -1,0 +1,159 @@
+{{- range $key, $app := .Values.apps }}
+{{- if $app.enabled }}
+{{- $name := printf "%s-%s-%s" ($.Release.Name | trunc 28 | trimSuffix "-") ($.Release.Name | sha256sum | trunc 8) $key }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $key }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  replicas: {{ $app.replicas }}
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $key }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $key }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+      annotations:
+        checksum/config: {{ toJson $app.config | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with $app.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $key }}
+          image: {{ printf "%s@%s" $app.image.repository $app.image.digest | quote }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          {{- with $app.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $app.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if $app.service.enabled }}
+          ports:
+            - name: http
+              containerPort: {{ $app.service.targetPort }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}
+            {{- range $app.secretRefs }}
+            - secretRef:
+                name: {{ . }}
+            {{- end }}
+          {{- with $app.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $app.readinessProbe | nindent 12 }}
+          {{- with $app.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $app.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+data:
+  {{- toYaml $app.config | nindent 2 }}
+{{- if $app.service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ $key }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+  ports:
+    - name: http
+      port: {{ $app.service.port }}
+      targetPort: http
+{{- if $app.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  {{- with $app.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ $app.ingress.className }}
+  {{- with $app.ingress.tlsSecret }}
+  tls:
+    - secretName: {{ . }}
+      hosts: [{{ $app.ingress.host | quote }}]
+  {{- end }}
+  rules:
+    - host: {{ $app.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $name }}
+                port:
+                  name: http
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

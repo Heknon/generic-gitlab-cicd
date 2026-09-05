@@ -1,0 +1,7 @@
+apiVersion: v2
+name: generic-app
+description: Multiple stateless monorepo applications with immutable images and existing secrets.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.25.0-0"
