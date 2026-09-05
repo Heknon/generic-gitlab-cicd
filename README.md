@@ -8,129 +8,111 @@ The package is named `generic-gitlab-cicd`; the command is `generic-ci`. GitLab 
 
 [Quick start](#quick-start) · [Workflow guide](docs/workflows-revision-one.md) · [CLI reference](docs/cli-reference.md) · [Examples](examples/workflows) · [Documentation](docs/README.md)
 
-## Why use it?
+## One repository. Tests, packages, and deployment.
 
-Use this toolkit when several services or repositories share delivery conventions, but each team needs to choose its own checks and release behavior.
+Keep your shared Python package and API together. Generic CI tests them, publishes the package on release, and deploys the API to OpenShift.
 
-- **Keep application intent readable.** Name your checks and select them for pushes, merge requests, releases, manual pipelines, or schedules. The toolkit does not insert an assumed test suite.
-- **Reuse platform configuration.** Share runner tags, prepared images, registries, and deployment targets through organization defaults and Git-backed templates.
-- **Connect monorepo work explicitly.** Declare which projects are affected by upstream changes and which jobs need upstream artifacts. Artifact receipts verify the producing commit, pipeline, configuration, and file checksums.
-- **Support internal infrastructure.** Use prepared runtime images, internal package services, and cached configuration sources. Consumer jobs have no automatic public toolkit bootstrap.
-- **Review generated changes before execution.** Commit the generated YAML alongside its inputs; validate configuration and detect generation drift locally or in CI.
+```yaml
+version: 1
 
-For a repository with a few standalone jobs, handwritten GitLab CI may be sufficient. This toolkit is most useful when repeated release, dependency, and deployment rules are becoming difficult to maintain consistently.
+projects:
+  sdk:
+    path: packages/sdk
+    python: {}
+    checks:
+      tests:
+        script: [uv run --no-sync pytest]
+    package:
+      index: internal
+    release:
+      tag: v{version}
+    workflows:
+      merge-request:
+        checks: [tests]
+      release:
+        checks: [tests]
+        publish: true
 
-## How it works
+  api:
+    path: services/api
+    depends-on: [sdk]
+    python: {}
+    checks:
+      tests:
+        script: [uv run --no-sync pytest]
+    container:
+      dockerfile: Dockerfile
+    release:
+      tag: v{version}
+      needs: [sdk]
+    workflows:
+      merge-request:
+        checks: [tests]
+      release:
+        checks: [tests]
+        build: [container]
 
-| File | What belongs here |
-| --- | --- |
-| `delivery.yml` | Projects, commands, workflow selection, builds, and deployments |
-| `ci-platform.yml` | Runtime images, runner tags, registry locations, and deployment targets |
-| `.gitlab-ci.yml` | Generated pipeline; regenerate after editing the inputs |
-| `generic-ci.yml` + `generic-ci.lock.json` | Optional organization source configuration and its pinned commit |
+deployments:
+  api:
+    target: production
+    chart:
+      path: deploy/chart
+    values: [deploy/values.yaml]
+    images:
+      - from: api.build-image
+        set:
+          repository: apps.api.image.repository
+          tag: apps.api.image.tag
+    workflows:
+      release:
+        when: manual
+```
 
-Run `generic-ci validate`, inspect `generic-ci explain`, then run `generic-ci render`. Commit the inputs and generated pipeline together. GitLab executes a planner and the selected runtime jobs using your prepared images.
+**What you get:**
+
+- **On merge requests:** test affected projects. SDK changes also select the API for testing.
+- **On a release tag:** run checks, publish the SDK, and build the API image. The API release depends on SDK publication; its tests and image build can run independently.
+- **When you approve deployment:** deploy the built API image through Helm to OpenShift.
+
+Both projects use a shared version: projects at `1.2.0` release under the protected tag `v1.2.0`. Dependency installation follows each project's declared dependencies and committed lockfile; `depends-on` selects work, not package replacements.
+
+Your organization supplies prepared runtime images, registry settings, and the production target in `ci-platform.yml`. The application's `deploy/chart` and `deploy/values.yaml` describe the deployment. Start with the [shared chart](charts/generic-app) and [values example](examples/helm-values.yaml); configure the named `internal` publishing index and CI credentials through your platform.
 
 ## Quick start
 
-Install the CLI as shown below, then run **`generic-ci setup`** from your application repository. It walks you through organization templates or standalone configuration, validates the result, and previews files before writing. It never overwrites existing files or installs a pre-commit hook.
-
-```sh
-generic-ci setup
-```
-
-Organization mode asks for a Git configuration repository (GitHub or GitLab), revision, template, and application settings. Standalone mode detects the ecosystem, asks for your existing test command and runtime infrastructure, and optionally creates a manual OpenShift MR preview with `deploy/values.yaml`. The chart must already be published and compatible with generic-app 2.x; setup does not provision infrastructure.
-
-Both paths write the generated pipeline, setup notes, and local editor schemas. See [setup and editor integration](docs/setup-revision-one.md) for unattended flags, dry runs, schema mappings, and limitations.
-
-The following manual walkthrough explains the files setup produces and remains useful when editing an existing configuration.
-
-This example adds push and merge-request tests to an **existing Python project**. It assumes the repository already has a `pyproject.toml`, a committed `uv.lock`, and pytest declared in a dependency group. Replace the test command if your project uses something else.
-
-### 1. Install the CLI
-
-Use Python **3.11 or newer**. From a checkout of this repository, install into an isolated environment:
+Use Python **3.11 or newer**. From a checkout of this toolkit, install the CLI into an isolated environment:
 
 ```sh
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install .
-generic-ci --help
 ```
 
-For repeatable organization setup, distribute a versioned wheel through your approved internal package index or wheelhouse. Keep the authoring CLI and the toolkit installed in runner images on the **same version**. This source revision is **0.3.3**; source availability does not imply that version has been published to PyPI.
+Then, from your application repository:
 
-The install command uses your configured package sources. In an air-gapped environment, prepare the wheel and all dependencies internally first.
-
-### 2. Provide the runtime configuration
-
-In your **application repository**, create `ci-platform.yml`:
-
-```yaml
-version: 1
-defaults:
-  tags: [internal-linux]
-images:
-  python: registry.example.internal/ci/python-toolkit:0.3.3
-container-builder:
-  engine: buildah
-  image: registry.example.internal/ci/buildah-toolkit:0.3.3
-registries:
-  containers: registry.example.internal/apps
-  previews: registry.example.internal/previews
-allowed-hosts:
-  - registry.example.internal
-  - gitlab.example.internal
-variables:
-  UV_PYTHON_DOWNLOADS: never
+```sh
+generic-ci setup
 ```
 
-**Replace the example addresses and tags with your platform's values.** These images are placeholders, not publicly available toolkit images. The Python image needs Python, Git, uv, the matching toolkit, and your internal package/CA configuration. The builder image needs Buildah and the matching Python toolkit runtime. Builder and registry settings are required by the platform schema even though this test-only example does not build or push an image.
+Setup guides you through organization templates or standalone configuration, previews files before writing, and includes local editor schemas. Start with its single-app configuration and add projects as needed, or choose an organization template for your monorepo. See the [setup guide](docs/setup-revision-one.md) for prepared images, unattended options, and editor integration.
 
-If your organization already provides a platform file or configuration source, use it. Platform maintainers can start with the [image-factory setup guide](starters/image-factory/CI-SETUP.md). Installing the CLI on your laptop does not prepare runner images.
-
-### 3. Define the checks
-
-Create `delivery.yml` in the application repository:
-
-```yaml
-version: 1
-projects:
-  app:
-    path: .
-    python:
-      groups: all
-    checks:
-      unit:
-        script:
-          - uv run --no-sync pytest
-    workflows:
-      push:
-        checks: [unit]
-      merge-request:
-        checks: [unit]
-```
-
-`path` is relative to the repository root. Commands run in that project directory. Python dependency preparation uses the committed lockfile; `--no-sync` prevents the test command from resynchronizing the environment. With `groups: all`, dependency groups must be mutually compatible.
-
-This configuration selects `unit` for push and merge-request workflows. Push pipelines are suppressed when an open MR takes their place. It does not publish a package, build an image, or deploy an application.
-
-### 4. Validate, inspect, and generate
-
-Run these commands from the application repository using the installed CLI:
+After editing your configuration:
 
 ```sh
 generic-ci validate
-generic-ci explain -o ci-explain.json
 generic-ci render -o .gitlab-ci.yml
-generic-ci render --check -o .gitlab-ci.yml
 ```
 
-Review `ci-explain.json` and the generated jobs, then commit `delivery.yml`, `ci-platform.yml`, and `.gitlab-ci.yml`. The explanation file is optional diagnostic output.
+Review and commit `delivery.yml`, your platform configuration, and the generated `.gitlab-ci.yml` together. Validate the generated pipeline with your GitLab CI Lint, then push your branch.
 
-Validate the generated YAML with **your GitLab CI Lint**, push the branch, and inspect the first pipeline. Local validation checks configuration and the job graph; it does not run pytest or check that a registry image exists. Your runner must match the configured tags and be able to pull the runtime image and reach the configured internal services.
+**Prefer autocomplete?** Setup exports the schemas automatically. You can also refresh them from the installed CLI:
 
-After changing a command, platform setting, or source lock, render again. Use `generic-ci render --check -o .gitlab-ci.yml` in CI to detect stale generated YAML.
+```sh
+generic-ci schema -o .generic-ci/delivery.schema.json
+generic-ci schema --platform-schema -o .generic-ci/platform.schema.json
+```
+
+Associate them with `delivery.yml` and `ci-platform.yml` in your editor. The [editor guide](docs/setup-revision-one.md#editor-completion-and-validation) includes PyCharm instructions.
 
 ## Add the delivery features you need
 
