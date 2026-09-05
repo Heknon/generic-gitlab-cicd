@@ -64,20 +64,20 @@ deployments:
   backend:
     chart:
       repository: https://artifactory.internal/helm
-      name: generic-services
-      version: 2.3.1
+      name: generic-app
+      version: 2.0.0
     values:
     - deploy/values/common.yaml
     - deploy/values/production.yaml
     images:
     - from: api.build-image
       set:
-        repository: services.api.image.repository
-        tag: services.api.image.tag
+        repository: apps.api.image.repository
+        tag: apps.api.image.tag
     - from: worker.build-image
       set:
-        repository: services.worker.image.repository
-        tag: services.worker.image.tag
+        repository: apps.worker.image.repository
+        tag: apps.worker.image.tag
     update: partial
     workflows:
       release:

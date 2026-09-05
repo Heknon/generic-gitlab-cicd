@@ -53,7 +53,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: {{ $key }}
-          image: {{ printf "%s@%s" $app.image.repository $app.image.digest | quote }}
+          image: {{ printf "%s:%s" $app.image.repository $app.image.tag | quote }}
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -125,34 +125,36 @@ spec:
     - name: http
       port: {{ $app.service.port }}
       targetPort: http
-{{- if $app.ingress.enabled }}
+{{- $route := default dict $app.route }}
+{{- if $route.enabled }}
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
   name: {{ $name }}
-  {{- with $app.ingress.annotations }}
+  {{- with $route.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  ingressClassName: {{ $app.ingress.className }}
-  {{- with $app.ingress.tlsSecret }}
-  tls:
-    - secretName: {{ . }}
-      hosts: [{{ $app.ingress.host | quote }}]
+  {{- with $route.host }}
+  host: {{ . | quote }}
   {{- end }}
-  rules:
-    - host: {{ $app.ingress.host | quote }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ $name }}
-                port:
-                  name: http
+  {{- with $route.path }}
+  path: {{ . | quote }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ $name }}
+  port:
+    targetPort: http
+  {{- with $route.wildcardPolicy }}
+  wildcardPolicy: {{ . | quote }}
+  {{- end }}
+  {{- with $route.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

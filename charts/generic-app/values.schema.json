@@ -19,8 +19,7 @@
           "config",
           "resources",
           "readinessProbe",
-          "service",
-          "ingress"
+          "service"
         ],
         "properties": {
           "enabled": {
@@ -34,16 +33,16 @@
             "type": "object",
             "required": [
               "repository",
-              "digest"
+              "tag"
             ],
             "properties": {
               "repository": {
                 "type": "string",
                 "minLength": 1
               },
-              "digest": {
+              "tag": {
                 "type": "string",
-                "pattern": "^sha256:[a-f0-9]{64}$"
+                "minLength": 1
               }
             }
           },
@@ -109,60 +108,53 @@
               }
             }
           },
-          "ingress": {
+          "route": {
             "type": "object",
-            "required": [
-              "enabled"
-            ],
             "properties": {
               "enabled": {
                 "type": "boolean"
-              }
-            }
-          }
-        },
-        "allOf": [
-          {
-            "if": {
-              "properties": {
-                "ingress": {
-                  "properties": {
-                    "enabled": {
-                      "const": true
-                    }
-                  }
+              },
+              "host": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "annotations": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
                 }
-              }
-            },
-            "then": {
-              "properties": {
-                "service": {
-                  "properties": {
-                    "enabled": {
-                      "const": true
-                    }
-                  }
-                },
-                "ingress": {
-                  "required": [
-                    "host",
-                    "className"
-                  ],
-                  "properties": {
-                    "host": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "className": {
-                      "type": "string",
-                      "minLength": 1
-                    }
+              },
+              "wildcardPolicy": {
+                "type": "string"
+              },
+              "tls": {
+                "type": "object",
+                "properties": {
+                  "termination": {
+                    "type": "string"
+                  },
+                  "insecureEdgeTerminationPolicy": {
+                    "type": "string"
+                  },
+                  "certificate": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "caCertificate": {
+                    "type": "string"
+                  },
+                  "destinationCACertificate": {
+                    "type": "string"
                   }
                 }
               }
             }
           }
-        ]
+        }
       }
     },
     "imagePullSecrets": {

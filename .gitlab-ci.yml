@@ -15,6 +15,7 @@ include:
     stage: test
     image: $HELM_CI_IMAGE
     commands:
+    - python -m unittest discover -s tests -p test_chart.py
     - helm lint charts/generic-app -f examples/helm-values.yaml --strict
     - helm template smoke charts/generic-app -f examples/helm-values.yaml > /tmp/rendered.yaml
 runtime-images:

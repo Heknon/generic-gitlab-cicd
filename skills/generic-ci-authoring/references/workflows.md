@@ -174,3 +174,13 @@ For npm-compatible consumers, configure a scope-specific preview registry in the
 - A retry reuses the version. uv uses the explicit destination's check URL for duplicate checking. npm existing-version retries fail; reconcile partial publication before retrying. The toolkit never deletes or overwrites packages to make a retry succeed, and does not yet provide cross-registry promotion or an npm remote-checksum reconciliation adapter.
 
 Local compilation, archive tests and mocked upload commands do not prove live registry permissions or isolation. Validate an intended workflow publication and exact-version install against your actual Artifactory/GitLab setup before adoption.
+
+## Shared OpenShift chart — revision five
+
+The bundled `charts/generic-app` chart is version **2.0.0**. Each `apps` entry deploys a stateless workload with optional Service and OpenShift Route. Images use `image.repository` and `image.tag`; map build output with `repository: apps.api.image.repository` and `tag: apps.api.image.tag`. The complete values example is `examples/helm-values.yaml`; the workflow deployment example is `examples/workflows/delivery.yml`.
+
+Routes accept `route.enabled`, `host`, `path`, `annotations`, `wildcardPolicy` and a `tls` mapping. TLS uses OpenShift field names: `termination`, `insecureEdgeTerminationPolicy`, `certificate`, `key` (private key), `caCertificate`, and `destinationCACertificate`. Edge termination uses the client-facing certificate/key/CA chain; re-encryption also supports a backend CA. Passthrough leaves TLS in the application. Omitting TLS creates an unsecured Route. The chart forwards these settings; it does not inspect certificates or enforce certificate policy.
+
+Supply PEM strings through values, or with `helm --set-file` when invoking Helm directly. Workflow deployment supports its existing ordered values files; no new `set-file` workflow field is introduced. Real keys belong in the team's secret-delivery mechanism. Route keys appear in rendered manifests and Helm release data, so account for those in artifact/access configuration. The chart does not issue or rotate certificates.
+
+This replaces chart 1.x Ingress/digest values. Migrate old values and bindings when upgrading; older digest-only component adapters remain compatible with chart 1.x. Buildah continues recording digests as build evidence. Shared repository availability requires publishing the chart separately; the illustrative repository URL is not a claim that it has been uploaded.

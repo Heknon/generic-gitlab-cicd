@@ -40,3 +40,9 @@
 - Preserve checks and explicit artifact prerequisites when inferring package builds from publication.
 - Distinct configured URLs cannot prove Artifactory virtual repository isolation. Document repository membership and scoped credentials as recommendations.
 - Preserve archive metadata validation and exact-version receipts. Development publication must not police fork status, candidate inputs, or shared repository choices. Leave registry permissions and overwrite policy to the configured platform; do not delete existing versions to fix a retry.
+
+## Shared chart
+
+- Chart 2.x uses OpenShift Routes and repository/tag images. TLS settings map directly to Route fields, including certificate, key, caCertificate and destinationCACertificate.
+- Keep chart values examples, schema and workflow image bindings aligned. Buildah still emits digest evidence; legacy digest-only adapters target chart 1.x.
+- Run chart render tests with Helm available, plus strict lint. Certificate examples contain placeholders only; do not claim a live OpenShift rollout from local renders.
