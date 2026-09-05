@@ -48,6 +48,16 @@ class SourceTests(unittest.TestCase):
         code,text=self.cli('init','--template','simple','--root',str(self.consumer),'--offline')
         self.assertEqual(code,0,text)
 
+    def test_setup_organization_uses_pinned_source_and_schemas(self):
+        self.assertEqual(self.cli('source','add','company','--repo',str(self.repo),'--ref','main','--default')[0],0)
+        code,text=self.cli('setup','--yes','--mode','organization','--source','company','--template','simple','--root',str(self.consumer),'--offline','--test-command','echo verified')
+        self.assertEqual(code,0,text)
+        pipeline,platform,_,_=load_project(self.consumer,offline=True)
+        self.assertEqual(pipeline.projects['app'].checks['custom'].script,['echo verified'])
+        self.assertEqual(platform.defaults.tags,['internal'])
+        self.assertTrue((self.consumer/'.generic-ci/platform.schema.json').is_file())
+        self.assertEqual(self.cli('render','--root',str(self.consumer),'--offline','--check','-o',str(self.consumer/'.gitlab-ci.yml'))[0],0)
+
     def test_init_inheritance_render_and_offline(self):
         self.init()
         pipeline,platform,origins,paths=load_project(self.consumer,offline=True)

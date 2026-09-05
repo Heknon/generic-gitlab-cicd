@@ -4,6 +4,8 @@ The installed CLI and generated JSON schemas are authoritative for accepted fiel
 
 | Command | Purpose and effects |
 |---|---|
+| `generic-ci setup` | Guided organization/standalone setup, schemas, validation and rendering; previews writes and refuses overwrites |
+| `generic-ci setup --yes --dry-run ...` | Validate supplied answers without prompts or project writes |
 | `generic-ci init --template NAME` | Copy a starter from the default source and write the project descriptor/lock; never overwrite files |
 | `generic-ci init --source NAME` | List templates from a named registration |
 | `generic-ci init --repo URL --ref REF --template NAME` | Initialize directly from Git without a global registration |
@@ -96,3 +98,7 @@ Run it in a job with the matching CLI and pinned source cache available. This ch
 ## Runtime validation changes in 0.3.2
 
 Selected checks cannot have an empty matrix or collide with generated job names such as version/build-image/publish. Complete release deployments require a shared tag convention; use partial updates for independently tagged images with an existing baseline. Entries in one check/build script execute in one shell, preserving exports and working-directory changes. Deployment ancestry checks fetch missing shallow history from origin before deciding whether an update is stale.
+
+## Setup and editor schemas
+
+See [setup — revision one](setup-revision-one.md). `generic-ci setup --help` lists setup-specific flags. Setup writes `.generic-ci/delivery.schema.json` and `.generic-ci/platform.schema.json` from the installed CLI and adds YAML schema comments. Refresh them after upgrading with `generic-ci schema -o .generic-ci/delivery.schema.json` and `generic-ci schema --platform-schema -o .generic-ci/platform.schema.json`. Map these to authoring YAML, not the generated GitLab YAML or Helm values.

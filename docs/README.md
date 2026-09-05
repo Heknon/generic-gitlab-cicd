@@ -1,6 +1,6 @@
 # Documentation map
 
-For the current 0.3.1 feature-branch interface, read the implementation guides below. The CLI compiles developer-owned workflows into GitLab CI. Existing components remain available separately.
+Start with the [README quick start](../README.md#quick-start), then use the implementation guides below. The CLI compiles developer-owned workflows into GitLab CI. Existing components remain available separately.
 
 | Need | Start here |
 |---|---|
@@ -12,7 +12,7 @@ For the current 0.3.1 feature-branch interface, read the implementation guides b
 | Copy a small complete authoring example | [Workflow examples](../examples/workflows) |
 | Configure an image-factory repository | [Image-factory starter](../starters/image-factory) and the workflow Buildah section |
 | Add offline editor completion | [Workflow schema](../schemas/workflows.schema.json), [platform schema](../schemas/workflows-platform.schema.json), [source schema](../schemas/source.schema.json), [project source schema](../schemas/source-project.schema.json) |
-| Use existing low-level GitLab components | [Repository component guide](../README.md), [air-gap guide](airgap.md), [Kubernetes guide](kubernetes.md) |
+| Use existing low-level GitLab components | [Component templates](../templates), [air-gap guide](airgap.md), [Kubernetes guide](kubernetes.md) |
 
 Historical developer-experience proposals, product-contracts documents and scenario audits describe earlier design/review stages. Consult current implementation guides and installed schemas before applying their YAML. They are not evidence that every proposed feature is implemented or production-tested.
 

@@ -1,6 +1,6 @@
 # Implemented workflows — revision one
 
-The workflow interface is available in the 0.3.1 feature branch. It replaces hidden test presets with team-defined checks and event selection. It remains a review build: target GitLab, Buildah/OpenShift and registry/cluster integration have not been exercised in this workspace.
+The default workflow interface uses team-defined checks and event selection. Start with the [README quick start](../README.md#quick-start). Version 0.3.2 passed the repository’s fast CI and disposable GitLab/Runner E2E scenarios; Buildah, registry publication, and OpenShift rollout still require qualification on the target infrastructure.
 
 ## Start and inspect
 
