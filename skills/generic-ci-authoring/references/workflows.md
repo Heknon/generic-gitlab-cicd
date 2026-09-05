@@ -184,3 +184,12 @@ Routes accept `route.enabled`, `host`, `path`, `annotations`, `wildcardPolicy` a
 Supply PEM strings through values, or with `helm --set-file` when invoking Helm directly. Workflow deployment supports its existing ordered values files; no new `set-file` workflow field is introduced. Real keys belong in the team's secret-delivery mechanism. Route keys appear in rendered manifests and Helm release data, so account for those in artifact/access configuration. The chart does not issue or rotate certificates.
 
 This replaces chart 1.x Ingress/digest values. Migrate old values and bindings when upgrading; older digest-only component adapters remain compatible with chart 1.x. Buildah continues recording digests as build evidence. Shared repository availability requires publishing the chart separately; the illustrative repository URL is not a claim that it has been uploaded.
+
+
+## Chart configuration flexibility — revision six
+
+Chart **2.1.0** adds per-app native `volumes`, `volumeMounts`, `ports`, `podLabels`, `podAnnotations`, `podSecurityContext`, `securityContext`, and `automountServiceAccountToken`. Services support native `ports`, `labels`, and `annotations`; `route.targetPort` selects the Service port and defaults to `http`. Container ports describe app listeners, Service ports map cluster access, and Routes expose one selected port. A metrics port can remain internal while HTTP is routed externally.
+
+Security contexts and token mounting are unset by default, leaving the image/service-account/cluster defaults in effect. No automatic `/tmp` volume is injected. Teams wanting the earlier restrictions and temporary mount can configure them explicitly. OpenShift admission policy still applies. Probes and resources are optional; requests and limits may be set independently. These are capabilities and configuration defaults, not enforced organizational policy.
+
+The original single-port `service.port`/`service.targetPort` shorthand remains supported. Explicit port lists replace the shorthand. Lists in additional Helm values files replace earlier lists. Volumes reference existing resources or use native ephemeral sources; the chart does not automatically provision PVCs. Monitoring annotations require a corresponding discovery configuration; ServiceMonitor/PodMonitor creation is not included. No init containers or sidecars are added in this revision.

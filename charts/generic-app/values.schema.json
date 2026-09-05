@@ -17,8 +17,6 @@
           "image",
           "replicas",
           "config",
-          "resources",
-          "readinessProbe",
           "service"
         ],
         "properties": {
@@ -53,44 +51,15 @@
             }
           },
           "resources": {
-            "type": "object",
-            "required": [
-              "requests",
-              "limits"
-            ]
+            "type": "object"
           },
           "readinessProbe": {
-            "type": "object",
-            "minProperties": 1,
-            "oneOf": [
-              {
-                "required": [
-                  "httpGet"
-                ]
-              },
-              {
-                "required": [
-                  "exec"
-                ]
-              },
-              {
-                "required": [
-                  "tcpSocket"
-                ]
-              },
-              {
-                "required": [
-                  "grpc"
-                ]
-              }
-            ]
+            "type": "object"
           },
           "service": {
             "type": "object",
             "required": [
-              "enabled",
-              "port",
-              "targetPort"
+              "enabled"
             ],
             "properties": {
               "enabled": {
@@ -105,6 +74,24 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 65535
+              },
+              "ports": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "annotations": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "labels": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -151,7 +138,58 @@
                     "type": "string"
                   }
                 }
+              },
+              "targetPort": {
+                "type": [
+                  "string",
+                  "integer"
+                ]
               }
+            }
+          },
+          "livenessProbe": {
+            "type": "object"
+          },
+          "startupProbe": {
+            "type": "object"
+          },
+          "podSecurityContext": {
+            "type": "object"
+          },
+          "securityContext": {
+            "type": "object"
+          },
+          "automountServiceAccountToken": {
+            "type": "boolean"
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "volumeMounts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "podLabels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "podAnnotations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
             }
           }
         }

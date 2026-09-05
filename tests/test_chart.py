@@ -51,3 +51,70 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(next(r for r in resources if r['kind'] == 'Route')['spec']['tls'], {'termination': 'passthrough'})
         resources = self.render(lambda app: app.pop('route'))
         self.assertNotIn('Route', [r['kind'] for r in resources])
+
+    def api_pod(self, resources):
+        return next(r for r in resources if r['kind'] == 'Deployment' and r['metadata']['labels']['app.kubernetes.io/name'] == 'api')['spec']['template']
+
+    def test_relaxed_defaults_and_optional_probes_resources(self):
+        def change(app):
+            app.pop('resources')
+            app.pop('readinessProbe')
+            app.pop('livenessProbe', None)
+        pod = self.api_pod(self.render(change))['spec']
+        container = pod['containers'][0]
+        self.assertNotIn('securityContext', pod)
+        self.assertNotIn('automountServiceAccountToken', pod)
+        self.assertNotIn('securityContext', container)
+        self.assertNotIn('resources', container)
+        self.assertNotIn('readinessProbe', container)
+        self.assertNotIn('livenessProbe', container)
+
+    def test_explicit_security_and_volumes_pass_through(self):
+        volumes = [{'name': 'settings', 'configMap': {'name': 'api-settings'}},
+                   {'name': 'data', 'persistentVolumeClaim': {'claimName': 'api-data'}},
+                   {'name': 'tmp', 'emptyDir': {}}]
+        mounts = [{'name': 'settings', 'mountPath': '/app/config', 'readOnly': True},
+                  {'name': 'data', 'mountPath': '/data'}, {'name': 'tmp', 'mountPath': '/tmp'}]
+        def change(app):
+            app.update(volumes=volumes, volumeMounts=mounts, automountServiceAccountToken=False,
+                       podSecurityContext={'runAsNonRoot': True, 'fsGroup': 2000},
+                       securityContext={'readOnlyRootFilesystem': True, 'allowPrivilegeEscalation': False},
+                       resources={'requests': {'memory': '128Mi'}})
+        pod = self.api_pod(self.render(change))['spec']
+        container = pod['containers'][0]
+        self.assertEqual(pod['volumes'], volumes)
+        self.assertEqual(container['volumeMounts'], mounts)
+        self.assertFalse(pod['automountServiceAccountToken'])
+        self.assertEqual(pod['securityContext']['fsGroup'], 2000)
+        self.assertTrue(container['securityContext']['readOnlyRootFilesystem'])
+        self.assertNotIn('limits', container['resources'])
+
+    def test_named_ports_and_monitoring_metadata(self):
+        ports = [{'name': 'web', 'containerPort': 8080}, {'name': 'metrics', 'containerPort': 9090}]
+        service_ports = [{'name': 'web', 'port': 80, 'targetPort': 'web'},
+                         {'name': 'metrics', 'port': 9090, 'targetPort': 'metrics'}]
+        def change(app):
+            app.update(ports=ports, podLabels={'team': 'backend'}, podAnnotations={'prometheus.io/scrape': 'true'})
+            app['service'] = {'enabled': True, 'ports': service_ports, 'labels': {'monitor': 'api'}}
+            app['route']['targetPort'] = 'web'
+        resources = self.render(change)
+        pod = self.api_pod(resources)
+        self.assertEqual(pod['spec']['containers'][0]['ports'], ports)
+        self.assertEqual(pod['metadata']['labels']['team'], 'backend')
+        self.assertEqual(pod['metadata']['labels']['app.kubernetes.io/name'], 'api')
+        self.assertEqual(pod['metadata']['annotations']['prometheus.io/scrape'], 'true')
+        self.assertIn('checksum/config', pod['metadata']['annotations'])
+        service = next(r for r in resources if r['kind'] == 'Service')
+        self.assertEqual(service['spec']['ports'], service_ports)
+        self.assertEqual(service['metadata']['labels'], {'monitor': 'api'})
+        self.assertEqual(next(r for r in resources if r['kind'] == 'Route')['spec']['port']['targetPort'], 'web')
+
+    def test_ports_without_service_and_explicit_empty_ports(self):
+        def change(app):
+            app['service'] = {'enabled': False}
+            app['ports'] = [{'name': 'metrics', 'containerPort': 9090}]
+        resources = self.render(change)
+        self.assertNotIn('Service', [r['kind'] for r in resources])
+        self.assertEqual(self.api_pod(resources)['spec']['containers'][0]['ports'][0]['containerPort'], 9090)
+        resources = self.render(lambda app: app.update(ports=[]))
+        self.assertNotIn('ports', self.api_pod(resources)['spec']['containers'][0])
