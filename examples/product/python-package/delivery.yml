@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=../../../schemas/delivery.schema.json
+schema-version: 1
+projects:
+  sdk:
+    preset: python-package
+    package:
+      index: internal
+    release:
+      tag: sdk-v{version}

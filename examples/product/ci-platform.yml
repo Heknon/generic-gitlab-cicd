@@ -1,0 +1,42 @@
+schema-version: 1
+runtimes:
+  default:
+    image: registry.internal/ci/python-uv-toolkit:0.2.0
+    tags:
+    - linux-amd64
+  build:
+    image: registry.internal/ci/buildkit-toolkit:0.2.0
+    tags:
+    - buildkit
+  helm:
+    image: registry.internal/ci/helm-toolkit:0.2.0
+    tags:
+    - cluster-access
+  release:
+    image: registry.internal/ci/release-toolkit:0.2.0
+    tags:
+    - linux-amd64
+  windows:
+    tags:
+    - windows
+    shell: powershell
+registry: registry.internal/apps
+preview-registry: registry.internal/previews
+chart: oci://registry.internal/charts/generic-app
+chart-version: 1.0.0
+allowed-hosts:
+- registry.internal
+- gitlab.internal
+- packages.internal
+targets:
+  staging:
+    namespace: staging
+    production: false
+    url: https://staging.internal
+  production:
+    namespace: production
+    url: https://api.internal
+  review:
+    namespace: review-$CI_PROJECT_ID-$CI_MERGE_REQUEST_IID
+    production: false
+    url: https://mr-$CI_MERGE_REQUEST_IID.preview.internal

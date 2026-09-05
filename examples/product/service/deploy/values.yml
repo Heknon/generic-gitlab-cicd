@@ -1,0 +1,25 @@
+apps:
+  api:
+    enabled: true
+    image:
+      repository: registry.internal/apps/api
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    replicas: 1
+    config: {}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    readinessProbe:
+      httpGet:
+        path: /health/ready
+        port: 8080
+    service:
+      enabled: true
+      port: 80
+      targetPort: 8080
+    ingress:
+      enabled: false

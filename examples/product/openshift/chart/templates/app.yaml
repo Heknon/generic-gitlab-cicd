@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels: {app: {{ .Release.Name }}}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}}
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          ports: [{containerPort: 8080}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  selector: {app: {{ .Release.Name }}}
+  ports: [{name: http, port: 80, targetPort: 8080}]
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  host: {{ .Values.route.host }}
+  to: {kind: Service, name: {{ .Release.Name }}}
+  port: {targetPort: http}
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
