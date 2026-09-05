@@ -1,0 +1,794 @@
+{
+  "$defs": {
+    "Check": {
+      "additionalProperties": false,
+      "properties": {
+        "runtime": {
+          "default": "default",
+          "description": "Platform runtime profile; selects tools and shell, independently of runner tags.",
+          "title": "Runtime",
+          "type": "string"
+        },
+        "script": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Commands after dependency setup; omit only when inheriting a preset check.",
+          "title": "Script"
+        },
+        "dependencies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Dependencies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gitlab": {
+          "$ref": "#/$defs/NativeJob"
+        },
+        "needs": {
+          "description": "Public step references: step or project.step.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "junit": {
+          "description": "Project-relative report paths.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Junit",
+          "type": "array"
+        }
+      },
+      "title": "Check",
+      "type": "object"
+    },
+    "Container": {
+      "additionalProperties": false,
+      "properties": {
+        "dockerfile": {
+          "default": "Dockerfile",
+          "title": "Dockerfile",
+          "type": "string"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/RootPath"
+            }
+          ],
+          "default": ".",
+          "title": "Context"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository"
+        },
+        "platform": {
+          "default": "linux/amd64",
+          "title": "Platform",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional Dockerfile build stage.",
+          "title": "Target"
+        },
+        "build-args": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Build-Args",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "BuildKit secret ID to file-type CI variable name.",
+          "title": "Secrets",
+          "type": "object"
+        },
+        "needs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "checks": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Checks"
+        },
+        "dependency-bundle": {
+          "default": false,
+          "description": "Dockerfile explicitly consumes named ci-dependencies context (see recipe).",
+          "title": "Dependency-Bundle",
+          "type": "boolean"
+        }
+      },
+      "title": "Container",
+      "type": "object"
+    },
+    "Dependencies": {
+      "additionalProperties": false,
+      "properties": {
+        "manager": {
+          "default": "uv",
+          "enum": [
+            "uv",
+            "none"
+          ],
+          "title": "Manager",
+          "type": "string"
+        },
+        "upgrade": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "all"
+              ],
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "none",
+          "description": "Upgrade policy within project constraints; changes are temporary.",
+          "title": "Upgrade"
+        },
+        "groups": {
+          "description": "Dependency groups; * selects all, [] excludes dev groups.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Groups",
+          "type": "array"
+        },
+        "extras": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Extras",
+          "type": "array"
+        },
+        "python": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Required interpreter version, verified without downloading Python.",
+          "title": "Python"
+        }
+      },
+      "title": "Dependencies",
+      "type": "object"
+    },
+    "Deployment": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "chart": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chart"
+        },
+        "chart-version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chart-Version"
+        },
+        "values": {
+          "description": "Project-relative values files, applied in order.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "array"
+        },
+        "checks": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Required source checks; omitted inherits all enabled project checks, [] opts out.",
+          "title": "Checks"
+        },
+        "before": {
+          "description": "Fresh commands after approval and before rollout, e.g. migrations.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Before",
+          "type": "array"
+        },
+        "after": {
+          "description": "Fresh commands after rollout; failure marks deployment failed.",
+          "items": {
+            "type": "string"
+          },
+          "title": "After",
+          "type": "array"
+        },
+        "images": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ImageBinding"
+          },
+          "description": "Container project to chart values binding; stock chart defaults to own container.",
+          "title": "Images",
+          "type": "object"
+        },
+        "preview": {
+          "default": false,
+          "title": "Preview",
+          "type": "boolean"
+        },
+        "auto-stop-in": {
+          "default": "2 days",
+          "title": "Auto-Stop-In",
+          "type": "string"
+        },
+        "when": {
+          "default": "manual",
+          "enum": [
+            "manual",
+            "on_success"
+          ],
+          "title": "When",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "title": "Deployment",
+      "type": "object"
+    },
+    "ImageBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "description": "Path in chart values for image repository.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Repository",
+          "type": "array"
+        },
+        "digest": {
+          "description": "Path in chart values for image sha256 digest.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Digest",
+          "type": "array"
+        }
+      },
+      "required": [
+        "repository",
+        "digest"
+      ],
+      "title": "ImageBinding",
+      "type": "object"
+    },
+    "NativeJob": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tags"
+        },
+        "services": {
+          "anyOf": [
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Services"
+        },
+        "parallel": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Native parallel:matrix; compiled into explicit jobs for receipt identity.",
+          "title": "Parallel"
+        },
+        "rules": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rules"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout"
+        },
+        "cache": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache"
+        },
+        "resource_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Group"
+        },
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "object"
+        },
+        "allow_failure": {
+          "default": false,
+          "title": "Allow Failure",
+          "type": "boolean"
+        }
+      },
+      "title": "NativeJob",
+      "type": "object"
+    },
+    "Package": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "default": ".",
+          "description": "Package build directory relative to project.path; useful for generated SDKs.",
+          "title": "Directory",
+          "type": "string"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Named tool.uv.index in pyproject; required to publish.",
+          "title": "Index"
+        },
+        "needs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "checks": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Checks"
+        }
+      },
+      "title": "Package",
+      "type": "object"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "default": ".",
+          "title": "Path",
+          "type": "string"
+        },
+        "preset": {
+          "default": "generic",
+          "enum": [
+            "generic",
+            "python-package",
+            "python-service"
+          ],
+          "title": "Preset",
+          "type": "string"
+        },
+        "dependencies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Dependencies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "checks": {
+          "patternProperties": {
+            "^[a-z][a-z0-9-]{0,39}$": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Check"
+                },
+                {
+                  "const": false,
+                  "type": "boolean"
+                }
+              ]
+            }
+          },
+          "title": "Checks",
+          "type": "object"
+        },
+        "steps": {
+          "patternProperties": {
+            "^[a-z][a-z0-9-]{0,39}$": {
+              "$ref": "#/$defs/Step"
+            }
+          },
+          "title": "Steps",
+          "type": "object"
+        },
+        "package": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Package"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "container": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Container"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "deploy": {
+          "patternProperties": {
+            "^[a-z][a-z0-9-]{0,39}$": {
+              "$ref": "#/$defs/Deployment"
+            }
+          },
+          "title": "Deploy",
+          "type": "object"
+        },
+        "release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Release"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "depends-on": {
+          "description": "Project dependencies used for transitive changed-only selection.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends-On",
+          "type": "array"
+        },
+        "watch": {
+          "description": "Additional repository-relative changed paths/globs.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Watch",
+          "type": "array"
+        }
+      },
+      "title": "Project",
+      "type": "object"
+    },
+    "Release": {
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "default": "v{version}",
+          "description": "Existing tag pattern; exactly one {version} placeholder.",
+          "title": "Tag",
+          "type": "string"
+        },
+        "version-file": {
+          "default": "pyproject.toml",
+          "title": "Version-File",
+          "type": "string"
+        },
+        "bump": {
+          "default": true,
+          "title": "Bump",
+          "type": "boolean"
+        },
+        "needs": {
+          "description": "Projects whose publication must complete first.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "notes": {
+          "default": "CHANGELOG.md",
+          "title": "Notes",
+          "type": "string"
+        },
+        "gitlab-release": {
+          "default": true,
+          "title": "Gitlab-Release",
+          "type": "boolean"
+        }
+      },
+      "title": "Release",
+      "type": "object"
+    },
+    "RootPath": {
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "description": "Explicit path relative to the repository root.",
+          "title": "Repository",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository"
+      ],
+      "title": "RootPath",
+      "type": "object"
+    },
+    "Step": {
+      "additionalProperties": false,
+      "properties": {
+        "runtime": {
+          "default": "default",
+          "description": "Platform runtime profile; selects tools and shell, independently of runner tags.",
+          "title": "Runtime",
+          "type": "string"
+        },
+        "script": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Script",
+          "type": "array"
+        },
+        "dependencies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Dependencies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gitlab": {
+          "$ref": "#/$defs/NativeJob"
+        },
+        "needs": {
+          "description": "Public step references: step or project.step.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "junit": {
+          "description": "Project-relative report paths.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Junit",
+          "type": "array"
+        },
+        "outputs": {
+          "description": "Named files/directories passed to dependent steps and builds.",
+          "patternProperties": {
+            "^[a-z][a-z0-9-]{0,39}$": {
+              "type": "string"
+            }
+          },
+          "title": "Outputs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "script"
+      ],
+      "title": "Step",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema-version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema-Version",
+      "type": "integer"
+    },
+    "projects": {
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,39}$": {
+          "$ref": "#/$defs/Project"
+        }
+      },
+      "title": "Projects",
+      "type": "object"
+    }
+  },
+  "required": [
+    "projects"
+  ],
+  "title": "Pipeline",
+  "type": "object"
+}

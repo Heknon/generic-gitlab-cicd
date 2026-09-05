@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "generic-gitlab-ci"
+version = "0.2.0"
+description = "Validated project configuration and reproducible GitLab delivery pipelines"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.10,<3", "PyYAML>=6,<7", "tomlkit>=0.13,<1", "packaging>=25,<27"]
+
+[project.scripts]
+generic-ci = "generic_ci.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["generic_ci*"]
