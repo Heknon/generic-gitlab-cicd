@@ -64,3 +64,31 @@ Within a project, needs may omit the project prefix. Deployment check references
 | container.secrets values | Names of file-type CI variables, not secrets themselves |
 
 Checks can customize image, tags, timeout, variables, services, parallel matrix and artifacts. Maps merge and lists replace. Selected matrix instances all gate dependent builds. Shared outputs from a check matrix are rejected. Runtime role images require the same installed toolkit and Python runtime; a bare arbitrary Python/Node image is insufficient.
+
+## Recommended pre-commit synchronization
+
+Add rendering to pre-commit so edits to delivery configuration, source locks or platform overrides regenerate the committed pipeline. With the pre-commit framework, add this local hook to `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: generic-ci-render
+        name: Regenerate GitLab CI
+        entry: generic-ci render -o .gitlab-ci.yml --offline
+        language: system
+        pass_filenames: false
+        always_run: true
+```
+
+Install the hook with `pre-commit install`. Both pre-commit and the matching generic-ci CLI must already be installed in the developer environment. Cache the project's pinned source with `generic-ci source fetch` (or import its Git bundle) before committing; --offline prevents a commit from unexpectedly fetching source configuration. Standalone configurations without a source descriptor do not require this cache.
+
+The hook runs at the repository root. If your input/output paths differ, adjust the command accordingly. When rendering modifies .gitlab-ci.yml, pre-commit stops the commit: review the generated diff, stage the updated file and commit again. Do not automatically stage generated changes from the hook.
+
+Keep a separate CI check because local hooks can be skipped:
+
+```sh
+generic-ci render --check -o .gitlab-ci.yml --offline
+```
+
+Run it in a job with the matching CLI and pinned source cache available. This checks synchronization only; it does not replace GitLab CI Lint or executing the pipeline. Teams that prefer a hook that never modifies files can use this --check command as the hook entry instead and render explicitly when it fails.
